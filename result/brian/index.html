@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phaser 3 Tetris</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #ffffff; /* Set the play area background to white */
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #ffffff; /* Ensure the canvas itself also has a white background */
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 400, // Increased width to accommodate next piece display
+            height: 600,
+            backgroundColor: '#ffffff', // White background
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+
+        const blockSize = 30;
+        const nextBlockSize = 15; // Half the size for next piece display
+        const boardWidth = 10;
+        const boardHeight = 20;
+        let board = [];
+        let currentBlock;
+        let nextBlock;
+        let cursors;
+        let spaceKey;
+        let dropTime = 1000;
+        let lastDropTime = 0;
+        let nextPieceDisplay = [];
+        let score = 0; // Current score
+        let highScore = 0; // High score
+        let level = 1; // Current level
+        let totalLinesCleared = 0; // Total lines cleared across levels
+        let scoreText; // Text object to display the score
+        let highScoreText; // Text object to display the high score
+        let levelText; // Text object to display the current level
+        let nextPieceText; // Text object to display the next piece
+        let borderGraphics; // Graphics object for drawing the border
+        let gameOverText; // Game Over text object
+        let startButton; // Start button object
+        let gameOver = false; // Flag to indicate if the game is over
+
+        const shapes = [
+            // I
+            [
+                [[1, 1, 1, 1]],       // Rotation 0
+                [[1], [1], [1], [1]]  // Rotation 1
+            ],
+            // O
+            [
+                [[1, 1], [1, 1]],     // Rotation 0 (O doesn't change in any rotation)
+            ],
+            // T
+            [
+                [[0, 1, 0], [1, 1, 1]], // Rotation 0
+                [[1, 0], [1, 1], [1, 0]], // Rotation 1
+                [[1, 1, 1], [0, 1, 0]], // Rotation 2
+                [[0, 1], [1, 1], [0, 1]]  // Rotation 3
+            ],
+            // Z
+            [
+                [[1, 1, 0], [0, 1, 1]], // Rotation 0
+                [[0, 1], [1, 1], [1, 0]] // Rotation 1
+            ],
+            // S
+            [
+                [[0, 1, 1], [1, 1, 0]], // Rotation 0
+                [[1, 0], [1, 1], [0, 1]] // Rotation 1
+            ],
+            // L
+            [
+                [[1, 1, 1], [1, 0, 0]], // Rotation 0
+                [[1, 1], [0, 1], [0, 1]], // Rotation 1
+                [[0, 0, 1], [1, 1, 1]], // Rotation 2
+                [[1, 0], [1, 0], [1, 1]]  // Rotation 3
+            ],
+            // J
+            [
+                [[1, 1, 1], [0, 0, 1]], // Rotation 0
+                [[0, 1], [0, 1], [1, 1]], // Rotation 1
+                [[1, 0, 0], [1, 1, 1]], // Rotation 2
+                [[1, 1], [1, 0], [1, 0]]  // Rotation 3
+            ]
+        ];
+
+        const shapeImages = [
+            'pink',        // Shape 0
+            'yellow',      // Shape 1
+            'lightblue',   // Shape 2
+            'green',       // Shape 3
+            'red',         // Shape 4
+            'orange',      // Shape 5
+            'blue'         // Shape 6
+        ];
+
+        function preload() {
+            this.load.image('pink', '/images/pink.png');
+            this.load.image('yellow', '/images/yellow.png');
+            this.load.image('lightblue', '/images/lightblue.png');
+            this.load.image('green', '/images/green.png');
+            this.load.image('red', '/images/red.png');
+            this.load.image('orange', '/images/orange.png');
+            this.load.image('blue', '/images/blue.png');
+        }
+
+        function create() {
+            // Initialize the board (2D array)
+            for (let y = 0; y < boardHeight; y++) {
+                board[y] = [];
+                for (let x = 0; x < boardWidth; x++) {
+                    board[y][x] = null;
+                }
+            }
+
+            // Draw the border around the play area
+            borderGraphics = this.add.graphics();
+            borderGraphics.lineStyle(4, 0x000000, 1); // Black border with 4px thickness
+            borderGraphics.strokeRect(0, 0, boardWidth * blockSize, boardHeight * blockSize);
+
+            // Set up controls
+            cursors = this.input.keyboard.createCursorKeys();
+            spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+            // Generate the first and next blocks
+            nextBlock = generateRandomBlock();
+            spawnBlock(this);
+
+            // Initialize the Game Over text (hidden initially)
+            gameOverText = this.add.text(150, 250, 'Game Over', { fontSize: '48px', fill: '#FF0000', backgroundColor: 'rgba(0, 0, 0, 0.5)' });
+            gameOverText.setOrigin(0.5, 0.5);
+            gameOverText.setVisible(false);
+            gameOverText.setDepth(10); // Ensure the text is displayed on top
+
+            // Initialize the Start button (hidden initially)
+            startButton = this.add.text(160, 350, 'Start New Game', {  
+                fontSize: '24px', 
+                fill: '#FFFFFF', 
+                backgroundColor: '#0000FF', 
+                padding: { x: 10, y: 5 },  // Optional padding for better visual appearance
+                align: 'center'
+            });
+            startButton.setOrigin(0.5, 0.5);
+            startButton.setInteractive({ useHandCursor: true });
+            startButton.setVisible(false);
+            startButton.setDepth(10); // Ensure the button is displayed on top
+            startButton.on('pointerdown', startNewGame, this); // Add click event
+
+            // Optional: Change the cursor when hovering over the text
+            startButton.on('pointerover', () => {
+                startButton.setStyle({ fill: '#FFD700' }); // Change text color on hover
+            });
+
+            startButton.on('pointerout', () => {
+                startButton.setStyle({ fill: '#FFFFFF' }); // Revert text color when not hovering
+            });
+
+            nextPieceText = this.add.text(320, 20, 'Next:', { fontSize: '14px', fill: '#000000' });
+
+            // Initialize score text
+            scoreText = this.add.text(320, 150, 'Score:\n0', { fontSize: '14px', fill: '#000000' });
+
+            // Initialize high score text
+            highScoreText = this.add.text(320, 200, `High Score:\n${highScore}`, { fontSize: '13px', fill: '#000000' });
+
+            // Initialize level text
+            levelText = this.add.text(320, 250, `Level:\n${level}`, { fontSize: '13px', fill: '#000000' });
+        }
+
+        function generateRandomBlock() {
+            const shapeIndex = Phaser.Math.Between(0, shapes.length - 1);
+            return {
+                shape: shapes[shapeIndex],
+                imageKey: shapeImages[shapeIndex], // Assign image key based on shape index
+                rotationIndex: 0, // Start with the first rotation
+                x: Math.floor(boardWidth / 2) - 1,
+                y: 0,
+                sprite: []
+            };
+        }
+
+        function spawnBlock(scene) {
+            currentBlock = nextBlock; // Set current block to the previously generated next block
+            currentBlock.sprite = []; // Reset sprite array for the current block
+            
+            // Check for collision right after spawning
+            if (isCollision(currentBlock.x, currentBlock.y, currentBlock.shape[currentBlock.rotationIndex])) {
+                endGame(scene); // End the game if there's a collision
+                return;
+            }
+            
+            createBlockSprites(scene);
+
+            nextBlock = generateRandomBlock(); // Generate the new next block
+            displayNextPiece(scene); // Display the next piece
+        }
+
+        function createBlockSprites(scene) {
+            // Clear existing sprites if any
+            if (currentBlock.sprite.length) {
+                currentBlock.sprite.forEach(sprite => sprite.destroy());
+                currentBlock.sprite = [];
+            }
+
+            // Create new sprites based on the current block's shape
+            const currentShape = currentBlock.shape[currentBlock.rotationIndex];
+            for (let y = 0; y < currentShape.length; y++) {
+                for (let x = 0; x < currentShape[y].length; x++) {
+                    if (currentShape[y][x]) {
+                        let block = scene.add.image((currentBlock.x + x) * blockSize, (currentBlock.y + y) * blockSize, currentBlock.imageKey);
+                        block.setOrigin(0, 0);
+                        block.setDisplaySize(blockSize, blockSize);
+                        currentBlock.sprite.push(block);
+                    }
+                }
+            }
+        }
+
+        function displayNextPiece(scene) {
+            // Clear existing display
+            if (nextPieceDisplay.length) {
+                nextPieceDisplay.forEach(sprite => sprite.destroy());
+                nextPieceDisplay = [];
+            }
+
+            // Display the next block's shape at half the size in a designated area
+            const nextShape = nextBlock.shape[nextBlock.rotationIndex];
+            for (let y = 0; y < nextShape.length; y++) {
+                for (let x = 0; x < nextShape[y].length; x++) {
+                    if (nextShape[y][x]) {
+                        let block = scene.add.image(320 + x * nextBlockSize, 50 + y * nextBlockSize, nextBlock.imageKey);
+                        block.setOrigin(0, 0);
+                        block.setDisplaySize(nextBlockSize, nextBlockSize);
+                        nextPieceDisplay.push(block);
+                    }
+                }
+            }
+        }
+
+        function update() {
+            if (gameOver) return; // Do nothing if the game is over
+
+            // Handle input
+            if (Phaser.Input.Keyboard.JustDown(cursors.left)) {
+                moveBlock(-1, 0, this);
+            } else if (Phaser.Input.Keyboard.JustDown(cursors.right)) {
+                moveBlock(1, 0, this);
+            } else if (Phaser.Input.Keyboard.JustDown(cursors.up)) {
+                rotateBlock(this);
+            } else if (Phaser.Input.Keyboard.JustDown(cursors.down)) {
+                if (!moveBlock(0, 1, this)) {
+                    // If the block can't move down, lock it in place and spawn a new one
+                    lockBlock(this);
+                    spawnBlock(this);
+                }
+            } else if (Phaser.Input.Keyboard.JustDown(spaceKey)) {
+                dropBlock(this);
+            }
+
+            // Handle block dropping over time
+            if (this.time.now > lastDropTime + dropTime) {
+                if (!moveBlock(0, 1, this)) {
+                    // If the block can't move down, lock it in place and spawn a new one
+                    lockBlock(this);
+                    spawnBlock(this);
+                }
+                lastDropTime = this.time.now;
+            }
+        }
+
+        function moveBlock(dx, dy, scene) {
+            let newX = currentBlock.x + dx;
+            let newY = currentBlock.y + dy;
+
+            // Check if the movement is valid
+            if (isValidMove(newX, newY, currentBlock.shape[currentBlock.rotationIndex])) {
+                currentBlock.x = newX;
+                currentBlock.y = newY;
+
+                // Update the block's position
+                updateBlockPosition(scene);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        function dropBlock(scene) {
+            // Drop the block all the way down
+            while (moveBlock(0, 1, scene)) {
+                // Keep moving the block down until it can't move anymore
+            }
+
+            // Lock the block in place and spawn a new one
+            lockBlock(scene);
+            spawnBlock(scene);
+        }
+
+        function rotateBlock(scene) {
+            // Determine the next rotation index
+            let nextRotationIndex = (currentBlock.rotationIndex + 1) % currentBlock.shape.length;
+            let nextShape = currentBlock.shape[nextRotationIndex];
+
+            // Check if the rotation is valid
+            if (isValidMove(currentBlock.x, currentBlock.y, nextShape)) {
+                // Assign the new rotation and update the rotation index
+                currentBlock.rotationIndex = nextRotationIndex;
+
+                // Update the sprites to reflect the rotation
+                createBlockSprites(scene);
+            }
+        }
+
+        function updateBlockPosition(scene) {
+            const currentShape = currentBlock.shape[currentBlock.rotationIndex];
+            let spriteIndex = 0;
+            for (let y = 0; y < currentShape.length; y++) {
+                for (let x = 0; x < currentShape[y].length; x++) {
+                    if (currentShape[y][x]) {
+                        let block = currentBlock.sprite[spriteIndex];
+                        block.x = (currentBlock.x + x) * blockSize;
+                        block.y = (currentBlock.y + y) * blockSize;
+                        spriteIndex++;
+                    }
+                }
+            }
+        }
+
+        function isValidMove(x, y, shape) {
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c]) {
+                        let newX = x + c;
+                        let newY = y + r;
+
+                        if (newX < 0 || newX >= boardWidth || newY >= boardHeight || (newY >= 0 && board[newY][newX])) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        function isCollision(x, y, shape) {
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c]) {
+                        let newX = x + c;
+                        let newY = y + r;
+
+                        if (newY >= 0 && board[newY][newX]) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function lockBlock(scene) {
+            const currentShape = currentBlock.shape[currentBlock.rotationIndex];
+            for (let r = 0; r < currentShape.length; r++) {
+                for (let c = 0; c < currentShape[r].length; c++) {
+                    if (currentShape[r][c]) {
+                        let boardX = currentBlock.x + c;
+                        let boardY = currentBlock.y + r;
+
+                        if (boardY >= 0) {
+                            board[boardY][boardX] = currentBlock.sprite.shift();
+                        }
+                    }
+                }
+            }
+
+            // Check for completed lines
+            let linesClearedThisMove = 0;
+            for (let r = boardHeight - 1; r >= 0; r--) {
+                let isComplete = true;
+                for (let c = 0; c < boardWidth; c++) {
+                    if (!board[r][c]) {
+                        isComplete = false;
+                        break;
+                    }
+                }
+
+                if (isComplete) {
+                    linesClearedThisMove++;
+                    // Remove the complete line
+                    for (let c = 0; c < boardWidth; c++) {
+                        board[r][c].destroy();
+                        board[r][c] = null;
+                    }
+
+                    // Move everything above it down
+                    for (let rowAbove = r - 1; rowAbove >= 0; rowAbove--) {
+                        for (let c = 0; c < boardWidth; c++) {
+                            if (board[rowAbove][c]) {
+                                board[rowAbove][c].y += blockSize;
+                                board[rowAbove + 1][c] = board[rowAbove][c];
+                                board[rowAbove][c] = null;
+                            }
+                        }
+                    }
+
+                    r++; // Check the same row again since it now contains the row above
+                }
+            }
+
+            // Update the score based on the number of lines cleared
+            if (linesClearedThisMove > 0) {
+                let points = 0;
+                switch (linesClearedThisMove) {
+                    case 1:
+                        points = 40;
+                        break;
+                    case 2:
+                        points = 100;
+                        break;
+                    case 3:
+                        points = 300;
+                        break;
+                    case 4:
+                        points = 1200;
+                        break;
+                }
+                score += points;
+                scoreText.setText(`Score:\n${score}`);
+
+                // Update the high score if needed
+                if (score > highScore) {
+                    highScore = score;
+                    highScoreText.setText(`High Score:\n${highScore}`);
+                }
+
+                // Update the total lines cleared and level
+                totalLinesCleared += linesClearedThisMove;
+
+                // Check if level should be increased
+                if (totalLinesCleared >= level * 10) {
+                    level++;
+                    levelText.setText(`Level:\n${level}`);
+
+                    // Increase the drop speed by 15%
+                    dropTime *= 0.85;
+                }
+            }
+        }
+
+        function endGame(scene) {
+            gameOver = true;
+            gameOverText.setVisible(true);
+            startButton.setVisible(true);
+        }
+
+        function startNewGame() {
+            // Destroy all existing blocks on the board
+            for (let y = 0; y < boardHeight; y++) {
+                for (let x = 0; x < boardWidth; x++) {
+                    if (board[y][x]) {
+                        board[y][x].destroy();  // Destroy the sprite
+                        board[y][x] = null;     // Clear the reference
+                    }
+                }
+            }
+
+            // Clear the next piece display
+            nextPieceDisplay.forEach(sprite => sprite.destroy());
+            nextPieceDisplay = [];
+
+            // Reset game variables
+            score = 0;
+            level = 1;
+            totalLinesCleared = 0;
+            dropTime = 1000;
+            scoreText.setText('Score:\n0');
+            levelText.setText(`Level:\n${level}`);
+            board = [];
+            for (let y = 0; y < boardHeight; y++) {
+                board[y] = [];
+                for (let x = 0; x < boardWidth; x++) {
+                    board[y][x] = null;
+                }
+            }
+
+            gameOver = false;
+            gameOverText.setVisible(false);
+            startButton.setVisible(false);
+
+            nextBlock = generateRandomBlock();
+            spawnBlock(this);
+        }
+    </script>
+</body>
+</html>
