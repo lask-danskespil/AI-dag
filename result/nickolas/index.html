@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block; /* Fjerner margin omkring canvas */
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: window.innerWidth,  // Brug fuld bredde
+            height: window.innerHeight, // Brug fuld højde
+            backgroundColor: '#2d2d2d',
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        let snake;
+        let snakeDirection = 'RIGHT';
+        let food;
+        let score = 0;
+        let lives = 3;
+        let cursors;
+        let snakeParts = [];
+        let obstacles = []; // Array til at holde forhindringer
+        let gameOverText;
+        let scoreText;
+        let livesText;
+        let snakeSpeed = 100; // Start hastighed
+        let moveEvent;
+        let foodText; // Reference til mad-emoji
+        let foodMoveEvent; // Timer event til madens bevægelse
+        let foodMovementSpeed = 100; // Hastighed for kattens bevægelse
+        let foodMoveDirection = { x: 1, y: 0 }; // Retning for kattens bevægelse
+        const touchThreshold = 10; // Mindre grænse for hvor tæt slangen skal være på maden for at spise den
+
+        function preload() {
+            // Ingen preload nødvendig for mad
+        }
+
+        function create() {
+            // Opret slangen som en array
+            snakeParts.push({ x: 200, y: 200 }); // Startposition for slangen
+            snake = this.add.graphics();
+
+            // Opret mad
+            spawnFood();
+            cursors = this.input.keyboard.createCursorKeys();
+
+            // Opret forhindringer
+            createObstacles(5); // Opret 5 tilfældige forhindringer
+
+            // Opret "Game Over" tekst
+            gameOverText = this.add.text(config.width / 2, config.height / 2, '', {
+                fontSize: '32px',
+                fill: '#ffffff',
+                align: 'center'
+            }).setOrigin(0.5); // Centrer teksten
+
+            // Opret score og liv tekst
+            scoreText = this.add.text(10, 10, 'Score: 0', {
+                fontSize: '16px',
+                fill: '#ffffff'
+            });
+
+            livesText = this.add.text(config.width - 100, 10, 'Lives: 3', {
+                fontSize: '16px',
+                fill: '#ffffff'
+            });
+
+            // Bevæg slangen
+            moveEvent = this.time.addEvent({
+                delay: snakeSpeed,
+                callback: moveSnake,
+                callbackScope: this,
+                loop: true
+            });
+
+            // Start madens bevægelse
+            foodMoveEvent = this.time.addEvent({
+                delay: foodMovementSpeed, // Tid mellem madens bevægelser (i ms)
+                callback: moveFood,
+                callbackScope: this,
+                loop: true
+            });
+
+            // Tegn forhindringer
+            drawObstacles();
+
+            // Lyt efter tastetryk for genstart
+            this.input.keyboard.on('keydown-SPACE', restartGame, this);
+        }
+
+        function update() {
+            if (cursors.left.isDown && snakeDirection !== 'RIGHT') {
+                snakeDirection = 'LEFT';
+            } else if (cursors.right.isDown && snakeDirection !== 'LEFT') {
+                snakeDirection = 'RIGHT';
+            } else if (cursors.up.isDown && snakeDirection !== 'DOWN') {
+                snakeDirection = 'UP';
+            } else if (cursors.down.isDown && snakeDirection !== 'UP') {
+                snakeDirection = 'DOWN';
+            }
+        }
+
+        function moveSnake() {
+            const head = { ...snakeParts[0] }; // Kopier hovedet
+            // Opdater hovedets position
+            if (snakeDirection === 'LEFT') {
+                head.x -= 20; // Større bevægelse
+            } else if (snakeDirection === 'RIGHT') {
+                head.x += 20; // Større bevægelse
+            } else if (snakeDirection === 'UP') {
+                head.y -= 20; // Større bevægelse
+            } else if (snakeDirection === 'DOWN') {
+                head.y += 20; // Større bevægelse
+            }
+
+            // Tjek for kollision med mad (berøring)
+            if (isTouchingFood(head, food)) {
+                score++;
+                scoreText.setText('Score: ' + score); // Opdater score
+                spawnFood(); // Opret ny mad
+                // Øg hastigheden for hver 10 point
+                if (score % 10 === 0) {
+                    snakeSpeed = Math.max(50, snakeSpeed - 10); // Maksimal hastighed på 50ms
+                    moveEvent.delay = snakeSpeed; // Opdater tidsintervallet
+                }
+            } else {
+                snakeParts.pop(); // Fjern den sidste del, hvis vi ikke spiser mad
+            }
+
+            snakeParts.unshift(head); // Tilføj det nye hoved
+            renderSnake(); // Tegn slangen
+
+            // Tjek for kollision med skærmens kanter
+            if (head.x < 0 || head.x >= config.width || head.y < 0 || head.y >= config.height) {
+                loseLife();
+            }
+
+            // Tjek for kollision med sig selv
+            for (let i = 1; i < snakeParts.length; i++) {
+                if (head.x === snakeParts[i].x && head.y === snakeParts[i].y) {
+                    loseLife();
+                }
+            }
+
+            // Tjek for kollision med forhindringer
+            for (let i = 0; i < obstacles.length; i++) {
+                if (head.x === obstacles[i].x && head.y === obstacles[i].y) {
+                    gameOver(); // Afslut spillet, hvis slangen rammer en forhindring
+                    break; // Stop loopet, da vi kun vil ramme én forhindring ad gangen
+                }
+            }
+        }
+
+        function isTouchingFood(head, food) {
+            return (
+                head.x < food.x + 40 + touchThreshold && head.x + 20 > food.x - touchThreshold &&
+                head.y < food.y + 40 + touchThreshold && head.y + 20 > food.y - touchThreshold
+            );
+        }
+
+        function spawnFood() {
+            const x = Phaser.Math.Between(0, Math.floor(config.width / 20) - 1) * 20; // Generer en tilfældig position til maden
+            const y = Phaser.Math.Between(0, Math.floor(config.height / 20) - 1) * 20;
+            food = { x: x, y: y };
+
+            // Opret et tekstobjekt til maden (kat emoji)
+            if (foodText) {
+                foodText.destroy(); // Fjern tidligere mad-emoji, hvis det findes
+            }
+            foodText = game.scene.scenes[0].add.text(food.x + 10, food.y + 10, '😸', {
+                fontSize: '40px', // Juster størrelsen af emoji (gør den større)
+                align: 'center'
+            }).setOrigin(0.5); // Centerer emoji'en
+        }
+
+        function moveFood() {
+            // Tilfældig retning for kattens bevægelse
+            if (Phaser.Math.Between(0, 3) === 0) { // 25% chance for at ændre retning
+                foodMoveDirection.x = Phaser.Math.Between(-1, 1);
+                foodMoveDirection.y = Phaser.Math.Between(-1, 1);
+            }
+
+            // Opdater kattens position, men flyt den kun lidt hurtigere
+            food.x += foodMoveDirection.x * 4; // Øget hastighed (flyt kattens position hurtigere)
+            food.y += foodMoveDirection.y * 4; // Øget hastighed (flyt kattens position hurtigere)
+
+            // Hold katten inden for skærmen
+            if (food.x < 0) {
+                food.x = 0;
+                foodMoveDirection.x = 1; // Skift retning
+            }
+            if (food.x >= config.width - 20) {
+                food.x = config.width - 20;
+                foodMoveDirection.x = -1; // Skift retning
+            }
+            if (food.y < 0) {
+                food.y = 0;
+                foodMoveDirection.y = 1; // Skift retning
+            }
+            if (food.y >= config.height - 20) {
+                food.y = config.height - 20;
+                foodMoveDirection.y = -1; // Skift retning
+            }
+
+            if (foodText) {
+                foodText.setPosition(food.x + 10, food.y + 10); // Opdater positionen af mad emoji
+            }
+        }
+
+        function createObstacles(count) {
+            // Generer forhindringer
+            for (let i = 0; i < count; i++) {
+                const x = Phaser.Math.Between(0, Math.floor(config.width / 20) - 1) * 20;
+                const y = Phaser.Math.Between(0, Math.floor(config.height / 20) - 1) * 20;
+                obstacles.push({ x: x, y: y });
+            }
+        }
+
+        function drawObstacles() {
+            // Tegn forhindringer som lorte emoji
+            for (let obstacle of obstacles) {
+                game.scene.scenes[0].add.text(obstacle.x + 10, obstacle.y + 10, '💩', {
+                    fontSize: '20px', // Juster størrelsen af emoji
+                    align: 'center'
+                }).setOrigin(0.5); // Centerer emoji'en
+            }
+        }
+
+        function renderSnake() {
+            snake.clear(); // Ryd grafikken før vi tegner slangen
+            snake.fillStyle(0x00ff00); // Grøn farve for slangen
+            for (let part of snakeParts) {
+                snake.fillRect(part.x, part.y, 20, 20); // Tegn hver del af slangen
+            }
+        }
+
+        function loseLife() {
+            lives--; // Tab et liv
+            livesText.setText('Lives: ' + lives); // Opdater livstælleren
+
+            // Tjek om der er flere liv tilbage
+            if (lives <= 0) {
+                gameOver();
+            } else {
+                resetSnake(); // Reset slangens position
+            }
+        }
+
+        function resetSnake() {
+            snakeParts = [{ x: 200, y: 200 }]; // Reset slangens position
+            snakeDirection = 'RIGHT'; // Reset retningen
+        }
+
+        function gameOver() {
+            // Vis "Game Over" tekst
+            gameOverText.setText('Game Over');
+            snakeParts = []; // Tøm slangedele
+            score = 0; // Reset score
+            moveEvent.paused = true; // Stop bevægelsen
+            foodMoveEvent.paused = true; // Stop madens bevægelse
+        }
+
+        function restartGame() {
+            // Genstart spillet
+            if (gameOverText.text !== '') { // Tjek om spillet er i game over tilstand
+                lives = 3; // Reset liv
+                score = 0; // Reset score
+                livesText.setText('Lives: ' + lives); // Opdater livstælleren
+                scoreText.setText('Score: ' + score); // Opdater score
+
+                // Tøm forhindringer og opret nye
+                obstacles = []; // Tøm forhindringer
+                createObstacles(5); // Opret nye forhindringer
+                drawObstacles(); // Tegn nye forhindringer
+
+                resetSnake(); // Reset slangens position
+                gameOverText.setText(''); // Ryd "Game Over" teksten
+                moveEvent.paused = false; // Genoptag bevægelsen
+                foodMoveEvent.paused = false; // Genoptag madens bevægelse
+
+                // Spawn mad på ny
+                spawnFood(); // Opret ny mad
+            }
+        }
+    </script>
+</body>
+</html>
