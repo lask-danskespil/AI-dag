@@ -94,7 +94,6 @@ class GameScene extends Phaser.Scene {
     }
 
     preload() {
-        // Indlæs alle nødvendige assets
         this.load.image('paddle', 'assets/paddle.png');
         this.load.image('ball', 'assets/ball2.png');
         this.load.image('green', 'assets/green_block.png');
@@ -106,45 +105,48 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-    // Tilføj baggrundsbilledet først, så det ligger bagved alle andre elementer
-    this.add.image(600, 500, 'background');
+        // Tilføj baggrundsbilledet først, så det ligger bagved alle andre elementer
+        this.add.image(600, 500, 'background');
 
-    // Opret paddle og bold
-    createPaddleAndBall.call(this);
-    
-    // Opret klodserne
-    createBricks.call(this);
-    
-    // Opret tekster
-    createTexts.call(this);
+        // Opret paddle og bold
+        createPaddleAndBall.call(this);
+        
+        // Opret klodserne
+        createBricks.call(this);
+        
+        // Opret tekster
+        createTexts.call(this);
 
-    // Indstillinger for input
-    cursors = this.input.keyboard.createCursorKeys();
+        // Indstillinger for input
+        cursors = this.input.keyboard.createCursorKeys();
 
-    // Start timeren
-    startTimer.call(this);
+        // Start timeren
+        startTimer.call(this);
 
-    // Opret en collider i bunden af skærmen
-    bottomCollider = this.add.rectangle(600, 990, 1200, 20, 0xff0000, 0); // Lige under paddle ved y=990
-    bottomCollider.setOrigin(0.5, 0);
-    this.physics.add.existing(bottomCollider, true);
+        // Opret en collider i bunden af skærmen
+        bottomCollider = this.add.rectangle(600, 990, 1200, 20, 0xff0000, 0); // Lige under paddle ved y=990
+        bottomCollider.setOrigin(0.5, 0);
+        this.physics.add.existing(bottomCollider, true);
 
-    // Tilføj collision mellem bold og bund-collider
-    this.physics.add.collider(ball, bottomCollider, onBottomCollision, null, this);
-}
-
+        // Tilføj collision mellem bold og bund-collider
+        this.physics.add.collider(ball, bottomCollider, onBottomCollision, null, this);
+    }
 
     update() {
+        // Øg paddle's hastighed
+        const paddleSpeed = 700; // Justér denne værdi for at matche boldens hastighed
+
         // Flyt paddle
         if (cursors.left.isDown) {
-            paddle.setVelocityX(-700);
+            paddle.setVelocityX(-paddleSpeed);
         } else if (cursors.right.isDown) {
-            paddle.setVelocityX(700);
+            paddle.setVelocityX(paddleSpeed);
         } else {
             paddle.setVelocityX(0);
         }
     }
 }
+
 
 // HighscoreScene Klasse
 class HighscoreScene extends Phaser.Scene {
@@ -298,9 +300,11 @@ function updateTimer() {
 
     // Hvis tiden er løbet ud, stop spillet
     if (initialTime <= 0 && !gameOverFlag) {
-        gameOver.call(this);
+        gameOver.call(this); // Kald gameOver-funktionen
+        timerEvent.remove(); // Fjern timer eventet, så det ikke fortsætter med at tælle
     }
 }
+
 
 function hitBrick(ball, brick) {
     if (shieldedBricks.has(brick)) {
@@ -354,10 +358,13 @@ function gameOver() {
         this.physics.pause();
         ball.setTint(0xff0000);
         paddle.setTint(0xff0000);
-        timerEvent.remove(); // Stop timer eventet
+        if (timerEvent) {
+            timerEvent.remove(); // Stop timer eventet, hvis det stadig kører
+        }
         promptForHighScore.call(this); // Bed om navn for highscore
     }
 }
+
 
 function gameWin() {
     levelText.setText(''); // Fjern level tekst
