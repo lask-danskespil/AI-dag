@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dropkick</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+</head>
+<body>
+<script>
+    var config = {
+        type: Phaser.AUTO,
+        width: 800,
+        height: 600,
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 4000 },
+                debug: false
+            }
+        },
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
+        }
+    };
+
+    var player1, player2, cursors, keys;
+    var player1IsJumping = false, player1IsKicking = false, player1JumpReleased = false;
+    var player2IsJumping = false, player2IsKicking = false, player2JumpReleased = false;
+    var gamePaused = false;
+    var winnerText, player1ScoreText, player2ScoreText;
+    var player1Wins = 0, player2Wins = 0;
+    var fightSound, jumpSound, ouchSound;
+    var startText;
+    var gameStarted = false;
+
+    var game = new Phaser.Game(config);
+
+    function preload () {
+        // Load the ninja sprite images
+        this.load.image('ninja-idle', 'assets/ninja-idle.png');
+        this.load.image('ninja-jump', 'assets/ninja-jump.png');
+        this.load.image('ninja-kick', 'assets/ninja-kick.png'); // Assuming this is the kick texture
+        this.load.image('ground', 'assets/platform.png');
+        this.load.audio('fightSound', 'assets/fight.wav'); // Load the "Fight!" sound
+        this.load.audio('jumpSound', 'assets/jump.wav'); // Load the kick sound
+        this.load.audio('ouchSound', 'assets/ouch.wav'); // Load the kick sound
+        // Make the background blue
+        this.cameras.main.setBackgroundColor('#3498db');
+    }
+
+    function create () {
+        // Add a static ground that spans the full width of the screen
+        var ground = this.physics.add.staticGroup();
+        ground.create(400, 568, 'ground').setScale(1, 1).refreshBody(); 
+
+        // Player 1 settings
+        player1 = this.physics.add.sprite(100, 250, 'ninja-idle');
+        player1.setScale(0.25); 
+        player1.setBounce(0); 
+        player1.setCollideWorldBounds(true);
+
+        // Player 2 settings
+        player2 = this.physics.add.sprite(700, 250, 'ninja-idle');
+        player2.setScale(0.25); 
+        player2.setBounce(0); 
+        player2.setCollideWorldBounds(true);
+
+        // Flip player 2's sprite horizontally
+        player2.setFlipX(true); 
+
+        // Enable collision with the ground
+        this.physics.add.collider(player1, ground);
+        this.physics.add.collider(player2, ground);
+
+        // Add collision detection between players
+        this.physics.add.collider(player1, player2, handlePlayerCollision, null, this);
+
+        // Add text to display winner
+        winnerText = this.add.text(400, 300, '', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setVisible(false);
+
+        // Add score text for both players
+        player1ScoreText = this.add.text(10, 10, 'Player 1 Wins: 0', { fontSize: '20px', fill: '#fff' });
+        player2ScoreText = this.add.text(600, 10, 'Player 2 Wins: 0', { fontSize: '20px', fill: '#fff' });
+
+        // Add start screen text
+        startText = this.add.text(400, 300, 'Spiller 1 styring: Q W E\nSpiller 2 styring: I O P\nStart med MELLEMRUM', { fontSize: '24px', fill: '#fff', align: 'center' }).setOrigin(0.5);
+
+        // Set custom controls
+        cursors = this.input.keyboard.createCursorKeys(); 
+        keys = this.input.keyboard.addKeys({
+            q: Phaser.Input.Keyboard.KeyCodes.Q,
+            w: Phaser.Input.Keyboard.KeyCodes.W,
+            e: Phaser.Input.Keyboard.KeyCodes.E,
+            i: Phaser.Input.Keyboard.KeyCodes.I,
+            o: Phaser.Input.Keyboard.KeyCodes.O,
+            p: Phaser.Input.Keyboard.KeyCodes.P,
+            space: Phaser.Input.Keyboard.KeyCodes.SPACE
+        });
+
+        // Load the sounds
+        fightSound = this.sound.add('fightSound');
+        jumpSound = this.sound.add('jumpSound');
+        ouchSound = this.sound.add('ouchSound');
+    }
+
+    function handlePlayerCollision(player1, player2) {
+        if (gamePaused) return; // Don't process if game is paused
+
+        // Determine who wins
+        if (player1IsKicking && !player2IsKicking) {
+            endGame("Player 1 Wins!");
+            player1Wins++;
+            updateScore();
+        } else if (!player1IsKicking && player2IsKicking) {
+            endGame("Player 2 Wins!");
+            player2Wins++;
+            updateScore();
+        } else if (player1IsKicking && player2IsKicking) {
+            if (player1.body.y < player2.body.y) {
+                endGame("Player 1 Wins!");
+                player1Wins++;
+                updateScore();
+            } else {
+                endGame("Player 2 Wins!");
+                player2Wins++;
+                updateScore();
+            }
+        }
+    }
+
+    function endGame(winner) {
+        ouchSound.play();
+        gamePaused = true;
+        winnerText.setText(winner).setVisible(true);
+        player1.setVelocity(0, 0);
+        player2.setVelocity(0, 0);
+        game.scene.pause(); // Pause physics
+    }
+
+    function updateScore() {
+        player1ScoreText.setText('Player 1 Wins: ' + player1Wins);
+        player2ScoreText.setText('Player 2 Wins: ' + player2Wins);
+    }
+
+    function resetGame() {
+        gamePaused = false;
+        player1.setPosition(100, 250);
+        player2.setPosition(700, 250);
+        player1.setTexture('ninja-idle');
+        player2.setTexture('ninja-idle');
+        player1IsJumping = player1IsKicking = player1JumpReleased = false;
+        player2IsJumping = player2IsKicking = player2JumpReleased = false;
+        winnerText.setVisible(false);
+        game.scene.resume(); // Resume physics
+        fightSound.play();
+    }
+
+    function update () {
+        // If game has not started yet, show start screen
+        if (!gameStarted) {
+            if (keys.space.isDown) {
+                startText.setVisible(false);
+                gameStarted = true;
+                fightSound.play(); // Play fight sound when game starts
+            }
+            return; // Don't execute further update logic if game hasn't started
+        }
+
+        if (gamePaused && keys.space.isDown) {
+            resetGame();
+            return;
+        }
+
+        // Player 1 controls (Q, W, E)
+        if (!player1IsKicking && !gamePaused) {
+            if (keys.q.isDown) {
+                player1.setVelocityX(-160);
+            } else if (keys.w.isDown) {
+                player1.setVelocityX(160);
+            } else {
+                player1.setVelocityX(0);
+            }
+        }
+
+        // Handle jumping for player 1
+        if (keys.e.isDown && player1.body.touching.down && !gamePaused) {
+            player1.setVelocityY(-1500);
+            player1.setTexture('ninja-jump');
+            player1IsJumping = true;
+            player1JumpReleased = false;
+            jumpSound.play();
+        }
+
+        if (keys.e.isUp) {
+            player1JumpReleased = true;
+        }
+
+        // Check if player 1 is in the air or on the ground
+        if (player1.body.touching.down && player1IsJumping && player1.body.velocity.y >= 0) {
+            player1.setTexture('ninja-idle');
+            player1IsJumping = false;
+            player1IsKicking = false;
+        }
+
+        if (player1IsKicking && player1.body.y > 330) {
+            player1IsKicking = false;
+            player1.setTexture('ninja-idle');
+        }
+
+        // Handle kicking for player 1
+        if (keys.e.isDown && !player1.body.touching.down && player1IsJumping && player1JumpReleased && !gamePaused) {
+            player1.setTexture('ninja-kick');
+            player1IsKicking = true;
+            player1IsJumping = false;
+
+            player1.body.setVelocityX(400); 
+            player1.body.setVelocityY(200);
+            jumpSound.play();
+        }
+
+        // Player 2 controls (I, O, P)
+        if (!player2IsKicking && !gamePaused) {
+            if (keys.i.isDown) {
+                player2.setVelocityX(-160);
+            } else if (keys.o.isDown) {
+                player2.setVelocityX(160);
+            } else {
+                player2.setVelocityX(0);
+            }
+        }
+
+        // Handle jumping for player 2
+        if (keys.p.isDown && player2.body.touching.down && !gamePaused) {
+            player2.setVelocityY(-1500);
+            player2.setTexture('ninja-jump');
+            player2IsJumping = true;
+            player2JumpReleased = false;
+            jumpSound.play();
+        }
+
+        if (keys.p.isUp) {
+            player2JumpReleased = true;
+        }
+
+        // Check if player 2 is in the air or on the ground
+        if (player2.body.touching.down && player2IsJumping && player2.body.velocity.y >= 0) {
+            player2.setTexture('ninja-idle');
+            player2IsJumping = false;
+            player2IsKicking = false;
+        }
+
+        if (player2IsKicking && player2.body.y > 330) {
+            player2IsKicking = false;
+            player2.setTexture('ninja-idle');
+        }
+
+        // Handle kicking for player 2
+        if (keys.p.isDown && !player2.body.touching.down && player2IsJumping && player2JumpReleased && !gamePaused) {
+            player2.setTexture('ninja-kick');
+            player2IsKicking = true;
+            player2IsJumping = false;
+
+            player2.body.setVelocityX(-400); 
+            player2.body.setVelocityY(200);
+            jumpSound.play();
+        }
+    }
+</script>
+</body>
+</html>
