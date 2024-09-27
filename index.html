@@ -4,12 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI-dag</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        .gallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .gallery img {
+            width: 256px;
+            height: 256px;
+            object-fit: cover;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .gallery img:hover {
+            transform: scale(1.05);
+        }
+
+    </style>    
 </head>
 <body>
     <h1>AI-dag</h1>
     <h2>Resultater</h2>
-    <ul>
-        <li><a href="result/skov.html">Lars Skov</a></li>
-    </ul>
+    <div class="gallery">
+        <a href="result/skov/index.html"><img alt="Lars Skov" src="10-40/skov.jpg"/></a>
+        <a href="result/willer/index.html"><img alt="Thomas Willer" src="10-40/willer.jpg"/></a>
+        <a href="result/casper/index.html"><img alt="Casper"src="10-40/casper.jpg"/></a>
+        <a href="result/aune/index.html"><img alt="Aune" src="10-40/aune.jpg"/></a>
+        <a href="result/mathias/index.html"><img alt="Mathias" src="10-40/mathias.jpg"/></a>
+        <a href="result/uffe/index.html"><img alt="Uffe" src="10-40/uffe.jpg"/></a>
+        <a href="result/sara/index.html"><img alt="Sara" src="10-40/sara.png"/></a>
+        <a href="result/nickolas/index.html"><img alt="Nickolas" src="10-40/nickolas.png"/></a>
+        <a href="result/emil/index.html"><img alt="Emil" src="10-40/emil.jpg"/></a>
+        <a href="result/brian/index.html"><img alt="Brian" src="10-40/brian.jpg"/></a>
+    </div>
 </body>
 </html>
