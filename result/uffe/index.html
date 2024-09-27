@@ -50,10 +50,6 @@
         this.load.image('cover', 'assets/cover.png');
         // Make the background blue
         this.cameras.main.setBackgroundColor('#3498db');
-        // Show the asset cover.png as a splash screen for 10 seconds
-        this.add.image(400, 300, 'cover').setScale(0.5).setInteractive().on('pointerdown', function() {
-            this.setVisible(false);
-        });
     }
 
     function create () {
@@ -109,6 +105,14 @@
         fightSound = this.sound.add('fightSound');
         jumpSound = this.sound.add('jumpSound');
         ouchSound = this.sound.add('ouchSound');
+
+        // Show the cover image as a splash screen before the game starts. Display for 3 seconds.
+        // Scale it down to avoid cropping
+        var cover = this.add.image(400, 300, 'cover');
+        cover.setScale(0.7);
+        this.time.delayedCall(3000, function() {
+            cover.destroy();
+        });
     }
 
     function handlePlayerCollision(player1, player2) {
