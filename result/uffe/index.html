@@ -47,8 +47,13 @@
         this.load.audio('fightSound', 'assets/fight.wav'); // Load the "Fight!" sound
         this.load.audio('jumpSound', 'assets/jump.wav'); // Load the kick sound
         this.load.audio('ouchSound', 'assets/ouch.wav'); // Load the kick sound
+        this.load.image('cover', 'assets/cover.png');
         // Make the background blue
         this.cameras.main.setBackgroundColor('#3498db');
+        // Show the asset cover.png as a splash screen for 10 seconds
+        this.add.image(400, 300, 'cover').setScale(0.5).setInteractive().on('pointerdown', function() {
+            this.setVisible(false);
+        });
     }
 
     function create () {
