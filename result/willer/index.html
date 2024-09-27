@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brick Breaker Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    
+</body>
+
+</html>
+
+<script>
+
+
+
+// Globale Variabler
+let paddle;
+let ball;
+let bricks;
+let cursors;
+let score = 0;
+let timerText;
+let scoreText;
+let initialTime = 120; // 2 minutter (120 sekunder)
+let timerEvent;
+let level = 1; // Start ved level 1
+let gameOverFlag = false; // For at sikre, at Game Over kun sker én gang
+let bottomCollider; // Collider til bunden af skærmen
+let testLevelFlag = false; // Hvis true, opretter vi kun én klods for at teste levels
+let levelText; // Til at vise midlertidige tekster som "Level Up!"
+let shieldedBricks = new Set(); // Holder styr på hvilke klodser der har skjold
+let highScores = JSON.parse(localStorage.getItem('highScores')) || []; // Hent highscore data
+
+const blockPoints = {
+    green: 10,
+    red: 8,
+    blue: 6,
+    yellow: 4,
+    purple: 2
+};
+
+// MenuScene Klasse
+class MenuScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'MenuScene' });
+    }
+
+    create() {
+        this.add.text(600, 100, 'TWS Brick Breaker', { fontSize: '64px', fill: '#FFF' }).setOrigin(0.5);
+
+        // Menu options
+        let startText = this.add.text(600, 250, 'Start Spil', { fontSize: '32px', fill: '#FFF' }).setOrigin(0.5);
+        startText.setInteractive();
+        startText.on('pointerdown', () => this.scene.start('GameScene'));
+
+        let highscoreText = this.add.text(600, 350, 'Highscore', { fontSize: '32px', fill: '#FFF' }).setOrigin(0.5);
+        highscoreText.setInteractive();
+        highscoreText.on('pointerdown', () => this.scene.start('HighscoreScene'));
+
+        let aboutText = this.add.text(600, 450, 'Om Spillet', { fontSize: '32px', fill: '#FFF' }).setOrigin(0.5);
+        aboutText.setInteractive();
+        aboutText.on('pointerdown', () => this.showAbout());
+    }
+
+    showAbout() {
+        // Skjul menutekster
+        this.children.each(child => child.setVisible(false));
+
+        // Vis information om spillet
+        this.add.text(600, 200, 'Dette spil er produceret af Thomas Willer Sandberg', { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5);
+        this.add.text(600, 250, 'i forbindelse med AI-dagen hos Danske Spil', { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5);
+        this.add.text(600, 300, 'd. 27. september 2024.', { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5);
+
+        let backText = this.add.text(600, 500, 'Tilbage til Menu', { fontSize: '32px', fill: '#FFF' }).setOrigin(0.5);
+        backText.setInteractive();
+        backText.on('pointerdown', () => this.scene.start('MenuScene'));
+    }
+}
+
+// GameScene Klasse
+class GameScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'GameScene' });
+    }
+
+    preload() {
+        // Indlæs alle nødvendige assets
+        this.load.image('paddle', 'assets/paddle.png');
+        this.load.image('ball', 'assets/ball2.png');
+        this.load.image('green', 'assets/green_block.png');
+        this.load.image('red', 'assets/red_block.png');
+        this.load.image('blue', 'assets/blue_block.png');
+        this.load.image('yellow', 'assets/yellow_block.png');
+        this.load.image('purple', 'assets/purple_block.png');
+        this.load.image('background', 'assets/background.png');        
+    }
+
+    create() {
+    // Tilføj baggrundsbilledet først, så det ligger bagved alle andre elementer
+    this.add.image(600, 500, 'background');
+
+    // Opret paddle og bold
+    createPaddleAndBall.call(this);
+    
+    // Opret klodserne
+    createBricks.call(this);
+    
+    // Opret tekster
+    createTexts.call(this);
+
+    // Indstillinger for input
+    cursors = this.input.keyboard.createCursorKeys();
+
+    // Start timeren
+    startTimer.call(this);
+
+    // Opret en collider i bunden af skærmen
+    bottomCollider = this.add.rectangle(600, 990, 1200, 20, 0xff0000, 0); // Lige under paddle ved y=990
+    bottomCollider.setOrigin(0.5, 0);
+    this.physics.add.existing(bottomCollider, true);
+
+    // Tilføj collision mellem bold og bund-collider
+    this.physics.add.collider(ball, bottomCollider, onBottomCollision, null, this);
+}
+
+
+    update() {
+        // Flyt paddle
+        if (cursors.left.isDown) {
+            paddle.setVelocityX(-700);
+        } else if (cursors.right.isDown) {
+            paddle.setVelocityX(700);
+        } else {
+            paddle.setVelocityX(0);
+        }
+    }
+}
+
+// HighscoreScene Klasse
+class HighscoreScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'HighscoreScene' });
+    }
+
+    create() {
+        this.add.text(600, 100, 'Highscore', { fontSize: '64px', fill: '#FFF' }).setOrigin(0.5);
+
+        let highScoreText = '';
+        highScores.forEach((entry, index) => {
+            highScoreText += `${index + 1}. ${entry.name}: ${entry.score}\n`;
+        });
+
+        this.add.text(600, 300, highScoreText, { fontSize: '32px', fill: '#FFF', align: 'center' }).setOrigin(0.5);
+
+        let backText = this.add.text(600, 500, 'Tilbage til Menu', { fontSize: '32px', fill: '#FFF' }).setOrigin(0.5);
+        backText.setInteractive();
+        backText.on('pointerdown', () => this.scene.start('MenuScene'));
+    }
+}
+
+// Phaser Konfiguration
+const config = {
+    type: Phaser.AUTO,
+    width: 1200,
+    height: 1000, // Opdateret højde
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 0 },
+            debug: false
+        }
+    },
+    scene: [MenuScene, GameScene, HighscoreScene]
+};
+
+
+const game = new Phaser.Game(config);
+
+// Start MenuScene
+game.scene.start('MenuScene');
+
+// Funktioner der bruges i spillet
+
+function createPaddleAndBall() {
+    // Opret paddle
+    paddle = this.physics.add.sprite(600, 950, 'paddle').setImmovable(); // Placer paddle ved bunden (y = 950)
+    paddle.body.allowGravity = false;
+    paddle.setCollideWorldBounds(true);
+
+    // Opret bold
+    ball = this.physics.add.sprite(600, 900, 'ball'); // Justér boldens placering over paddle
+    ball.setCollideWorldBounds(true);
+    ball.setBounce(1);
+    
+    // Øg boldens starthastighed
+    ball.setVelocity(-200, -400); // Start med en højere hastighed
+
+    ball.setOrigin(0.5, 1); // Justér origin til bunden
+
+    // Kollisionshåndtering
+    this.physics.add.collider(ball, paddle, hitPaddle, null, this);
+}
+
+
+
+function hitPaddle(ball, paddle) {
+    let diff = 0;
+    if (ball.x < paddle.x) {
+        diff = paddle.x - ball.x;
+        ball.setVelocityX(-10 * diff);
+    } else if (ball.x > paddle.x) {
+        diff = ball.x - paddle.x;
+        ball.setVelocityX(10 * diff);
+    } else {
+        ball.setVelocityX(2 + Math.random() * 8);
+    }
+}
+
+function createBricks() {
+    const colors = ['green', 'red', 'blue', 'yellow', 'purple'];
+    const rows = 6; // Antal rækker af klodser
+    const cols = 10; // Antal kolonner af klodser
+    const brickWidth = 100; // Bredde på klodserne
+    const brickHeight = 40; // Højde på klodserne
+    const xOffset = 70; // X offset for at centrere klodserne
+
+    bricks = this.physics.add.staticGroup();
+
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            if (Math.random() > 0.2) { // 80% chance for at skabe en klods, 20% chance for at lave et hul
+                let randomColor = Phaser.Utils.Array.GetRandom(colors);
+                let x = xOffset + col * brickWidth;
+                let y = 100 + row * brickHeight; // Start y-position højere oppe
+                let brick = bricks.create(x, y, randomColor);
+
+                // Tilføj skjold med 20% sandsynlighed
+                if (Math.random() < 0.2) {
+                    shieldedBricks.add(brick);
+                    let shieldGraphics = this.add.graphics();
+                    shieldGraphics.lineStyle(5, 0xffffff, 1);
+                    shieldGraphics.strokeRect(brick.x - brick.width / 2, brick.y - brick.height / 2, brick.width, brick.height);
+                    brick.shieldGraphics = shieldGraphics;
+                }
+            }
+        }
+    }
+
+    // Kollisionshåndtering
+    this.physics.add.collider(ball, bricks, hitBrick, null, this);
+}
+
+
+function createTexts() {
+    // Tilføj score tekst
+    scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#FFF' });
+
+    // Tilføj timer tekst
+    timerText = this.add.text(1000, 16, 'Time: 2:00', { fontSize: '32px', fill: '#FFF' }); // Opdateret til højre hjørne
+
+    // Tilføj level tekst (skjult til start)
+    levelText = this.add.text(600, 300, '', { fontSize: '64px', fill: '#FFF' }).setOrigin(0.5, 0.5);
+}
+
+function startTimer() {
+    if (timerEvent) {
+        timerEvent.remove(); // Fjern eksisterende timer
+    }
+
+    initialTime = Math.floor(120 * Math.pow(0.75, level - 1)); // 120 sek -> 90 sek -> 60 sek
+    timerText.setText(`Time: ${Math.floor(initialTime / 60)}:${initialTime % 60 < 10 ? '0' : ''}${initialTime % 60}`);
+    timerEvent = this.time.addEvent({
+        delay: 1000, // 1 sekund
+        callback: updateTimer,
+        callbackScope: this,
+        loop: true
+    });
+}
+
+function updateTimer() {
+    initialTime -= 1; // Fjern 1 sekund fra tiden
+
+    // Opdater timer tekst
+    let minutes = Math.floor(initialTime / 60);
+    let seconds = initialTime % 60;
+    seconds = seconds < 10 ? '0' + seconds : seconds;
+    timerText.setText('Time: ' + minutes + ':' + seconds);
+
+    // Hvis tiden er løbet ud, stop spillet
+    if (initialTime <= 0 && !gameOverFlag) {
+        gameOver.call(this);
+    }
+}
+
+function hitBrick(ball, brick) {
+    if (shieldedBricks.has(brick)) {
+        // Fjern skjoldet, fjern ramme og fjern fra skjoldet liste
+        shieldedBricks.delete(brick);
+        if (brick.shieldGraphics) {
+            brick.shieldGraphics.destroy(); // Fjern rammen
+        }
+    } else {
+        // Ødelæg klodsen hvis ingen skjold
+        brick.disableBody(true, true);
+    }
+
+    // Beregn point baseret på bloktype
+    let blockType = brick.texture.key; // Få farven som navn
+    let points = blockPoints[blockType] || 0; // Få point for farven
+
+    score += points;
+    scoreText.setText('Score: ' + score);
+
+    // Tjek om alle klodser er væk
+    if (bricks.countActive() === 0) {
+        if (level < 3) {
+            // Gå til næste level
+            levelUp.call(this);
+        } else {
+            // Spillet vundet
+            gameWin.call(this);
+        }
+    }
+}
+
+function resetBall() {
+    ball.setVelocity(0);
+    ball.setPosition(paddle.x, 500);
+    this.input.once('pointerdown', function() {
+        ball.setVelocity(-75, -300);
+    }, this);
+}
+
+function onBottomCollision() {
+    gameOver.call(this);
+}
+
+function gameOver() {
+    if (!gameOverFlag) {
+        gameOverFlag = true; // Undgå gentagne game over kald
+        levelText.setText(''); // Fjern level tekst
+        this.add.text(600, 300, 'Game Over!', { fontSize: '64px', fill: '#FFF' }).setOrigin(0.5, 0.5);
+        this.add.text(600, 400, 'Final Score: ' + score, { fontSize: '32px', fill: '#FFF' }).setOrigin(0.5, 0.5);
+        this.physics.pause();
+        ball.setTint(0xff0000);
+        paddle.setTint(0xff0000);
+        timerEvent.remove(); // Stop timer eventet
+        promptForHighScore.call(this); // Bed om navn for highscore
+    }
+}
+
+function gameWin() {
+    levelText.setText(''); // Fjern level tekst
+    this.physics.pause(); // Stop al fysik
+    timerEvent.remove(); // Stop timeren
+    this.add.text(600, 300, 'You Win!', { fontSize: '64px', fill: '#FFF' }).setOrigin(0.5, 0.5);
+    this.add.text(600, 400, 'Final Score: ' + score, { fontSize: '32px', fill: '#FFF' }).setOrigin(0.5, 0.5);
+    ball.setTint(0x00ff00);
+    paddle.setTint(0x00ff00);
+    promptForHighScore.call(this); // Bed om navn for highscore
+}
+
+function levelUp() {
+    level += 1;
+    levelText.setText('Level Up!'); // Vis "Level Up!"
+    ball.setVelocity(0);
+    this.physics.pause();
+
+    this.time.delayedCall(2000, () => {
+        levelText.setText(''); // Fjern "Level Up!" tekst
+        this.physics.resume();
+        bricks.clear(true, true); // Ryd de gamle klodser
+        createBricks.call(this); // Opret nye klodser for næste level
+        resetBall.call(this);
+        startTimer.call(this);
+
+        // Øg boldens hastighed for hvert level for at øge sværhedsgraden
+        let newVelocity = Math.min(400 + (level - 1) * 100, 800); // Øg startniveauet og maks hastighed
+        ball.setVelocity(-newVelocity, -newVelocity);
+    }, [], this);
+}
+
+
+// Highscore-funktioner
+
+function promptForHighScore() {
+    let playerName = prompt("Enter your name for the highscore:");
+    if (playerName) {
+        saveHighScore(playerName, score);
+        this.time.delayedCall(2000, () => {
+            this.scene.start('HighscoreScene');
+        }, [], this);
+    }
+}
+
+function saveHighScore(playerName, score) {
+    highScores.push({ name: playerName, score: score });
+    highScores.sort((a, b) => b.score - a.score); // Sortér efter score (højeste først)
+    highScores = highScores.slice(0, 5); // Behold kun de 5 bedste
+
+    localStorage.setItem('highScores', JSON.stringify(highScores));
+}
+
+function displayHighScores() {
+    let highScoreText = "High Scores:\n";
+    highScores.forEach((entry, index) => {
+        highScoreText += `${index + 1}. ${entry.name}: ${entry.score}\n`;
+    });
+
+    this.add.text(600, 500, highScoreText, { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5, 0.5);
+}
+
+
+
+
+</script>
