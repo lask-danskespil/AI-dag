@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phaser 3 Level Up Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+</head>
+<body>
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: screen.width *0.9,
+            height: screen.height *0.9,
+            backgroundColor: '#000',
+            
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        let level = localStorage.getItem('level') ? parseInt(localStorage.getItem('level')) : 1;
+        let pickaxelevel = localStorage.getItem('pickaxelevel') ? parseInt(localStorage.getItem('pickaxelevel')) : 1;
+        let helmetlevel = localStorage.getItem('helmetlevel') ? parseInt(localStorage.getItem('helmetlevel')) : 1;
+        let xp = localStorage.getItem('xp') ? parseInt(localStorage.getItem('xp')) : 0;
+        let xpToLevelUp = localStorage.getItem('xpToLevelUp') ? parseInt(localStorage.getItem('xpToLevelUp')) : 5;    
+        let goldToLevelUpPickaxe = localStorage.getItem('goldToLevelUpPickaxe') ? parseInt(localStorage.getItem('goldToLevelUpPickaxe')) : 10;    
+        let goldToLevelUpHelmet = localStorage.getItem('goldToLevelUpHelmet') ? parseInt(localStorage.getItem('goldToLevelUpHelmet')) : 10;        
+        let gold = localStorage.getItem('gold') ? parseInt(localStorage.getItem('gold')) : 0;
+        let xpPerSecond = 1;
+        let pickdelay = 500;
+
+        // buttons, texts and graphics
+        let hero;
+        let xpText;
+        let levelText;
+        let pickaxe;
+        let level1helmet;
+        let goldVein;
+        let goldText;
+        let levelUpButton;
+        let levelUpPickaxeButton;
+        let levelUpHelmetButton;
+        let pickaxeLevelText;
+        let helmetLevelText;
+        let background;
+        let castleBackground;
+        let fireBackground;
+
+        const game = new Phaser.Game(config);
+
+        function preload() {
+            this.load.image('hero', '/Spil1/Hero.png');
+            this.load.image('forrest-background', '/Spil1/forrest-background.webp');
+            this.load.image('fire-background', '/Spil1/fireforrest.webp');
+            this.load.image('Castle', '/Spil1/Castle.webp');
+            this.load.image('helmet', '/Spil1/Helmet.png');
+            this.load.image('gold', '/Spil1/Gold.png');
+            this.load.image('pickaxe', '/Spil1/pickaxe.png');
+            this.load.audio('backgroundMusic', '/Spil1/background-music.mp3');
+            this.load.audio('pickaxeSound', '/Spil1/pickaxe-sound.mp3');
+            // Load any assets here (like hero sprite), but we'll use a basic shape for now
+        }
+
+        function create() {
+            this.sound.add('backgroundMusic', { loop: true }).play();
+            background = this.add.image(this.cameras.main.width / 2, this.cameras.main.height / 2, 'forrest-background').setOrigin(0.5, 0.5).setVisible(true).setDepth(-3);
+            castleBackground = this.add.image(this.cameras.main.width / 2, this.cameras.main.height / 2, 'Castle').setOrigin(0.5, 0.5).setDepth(-2).setVisible(false);
+            fireBackground = this.add.image(this.cameras.main.width / 2, this.cameras.main.height / 2, 'fire-background').setOrigin(0.5, 0.5).setDepth(-1).setVisible(false);
+            // Create the hero in the center of the screen
+            hero = this.add.sprite(this.cameras.main.width / 2, this.cameras.main.height / 2, 'hero');
+            goldText = this.add.text(this.cameras.main.width - 20, 60, `Gold: ${gold}`, { font: '24px Arial', fill: '#ffd700' }).setOrigin(1, 0);
+            level1helmet = this.add.sprite(hero.x, hero.y - 210, 'helmet').setScale(0.34).setOrigin(0.5, 1);
+            goldVein = this.add.sprite(hero.x + 320, hero.y + 380, 'gold').setScale(0.3).setOrigin(0.5, 1);
+            pickaxe = this.add.sprite(hero.x - 120, hero.y + 180, 'pickaxe');
+
+            initpickaxe(this, pickaxe);
+            // Display XP and Level
+            xpText = this.add.text(this.cameras.main.width - 20, 20, `XP: ${xp}`, { font: '24px Arial', fill: xp >= xpToLevelUp ? '#00ff00' : '#ff0000' }).setOrigin(1, 0);
+            levelText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 - 50, `Level: ${level}`, { font: '24px Arial', fill: '#fff', backgroundColor: '#808080', padding: { x: 10, y: 5 } }).setOrigin(0.5);
+            pickaxeLevelText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 0, `Pickaxe Level: ${pickaxelevel}`, { font: '24px Arial', fill: '#fff', backgroundColor: '#808080', padding: { x: 10, y: 5 } }).setOrigin(0.5);
+            helmetLevelText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 50, `Helmet Level: ${helmetlevel}`, { font: '24px Arial', fill: '#fff', backgroundColor: '#808080', padding: { x: 10, y: 5 } }).setOrigin(0.5);
+            resetGame = this.add.text(this.cameras.main.width - 20, this.cameras.main.height - 20, 'Reset Game', { font: '24px Arial', fill: '#fff', backgroundColor: '#e74c3c', padding: { x: 10, y: 5 } }).setOrigin(1, 1)
+                .setInteractive()
+                .on('pointerdown', resetGame);
+            // Create the Level Up button
+            levelUpButton = this.add.text(20, 20, `Level Up ${xpToLevelUp} xp`, { font: '24px Arial', fill: '#fff', backgroundColor: '#2ecc71', padding: { x: 10, y: 5 } })
+                .setInteractive()
+                .on('pointerdown', levelUp);
+            // Create the Level Up Pickaxe button
+            levelUpHelmetButton = this.add.text(20, 100, `Level Up Helmet ${goldToLevelUpHelmet} gold`, { font: '24px Arial', fill: '#fff', backgroundColor: '#e67e22', padding: { x: 10, y: 5 } })
+                .setInteractive()
+                .on('pointerdown', levelUpHelmet);
+
+            function levelUpHelmet() {
+                if (gold >= goldToLevelUpHelmet) {
+                    helmetlevel += 1;
+                    gold -= goldToLevelUpHelmet;
+                    goldToLevelUpHelmet = Math.ceil(goldToLevelUpHelmet * 1.5 / 10) * 10; // Increase the gold needed for each level exponentially and round to the nearest 10
+                    localStorage.setItem('goldToLevelUpHelmet', goldToLevelUpHelmet); // Save the new goldToLevelUpHelmet in local storage
+                    localStorage.setItem('helmetlevel', helmetlevel); // Save the helmet level in local storage
+                    xp += 100;
+                }
+            }
+
+            levelUpPickaxeButton = this.add.text(20, 60, `Level Up Pickaxe ${goldToLevelUpPickaxe} gold`, { font: '24px Arial', fill: '#fff', backgroundColor: '#3498db', padding: { x: 10, y: 5 } })
+                .setInteractive()
+                .on('pointerdown', levelUpPickaxe);
+
+            function levelUpPickaxe() {
+                if (gold >= goldToLevelUpPickaxe) {
+                    pickaxelevel += 1;
+                    gold -= goldToLevelUpPickaxe;
+                    goldToLevelUpPickaxe = Math.ceil(goldToLevelUpPickaxe * 1.5 / 10) * 10; // Increase the XP needed for each level exponentially and round to the nearest 10
+                    localStorage.setItem('goldToLevelUpPickaxe', goldToLevelUpPickaxe); // Save the new xpToLevelUp in local storage
+                    localStorage.setItem('pickaxelevel', pickaxelevel); // Save the sword level in local storage
+                    xp += 100;
+                }
+            }
+            // XP gains every second
+            this.time.addEvent({
+                delay: pickdelay * 2,
+                callback: gainXP,
+                callbackScope: this,
+                loop: true
+            });
+        }
+
+        function update() {
+            // Update the XP and Level UI
+            xpText.setText(`XP: ${xp}`);
+            xpText.setFill(xp >= xpToLevelUp ? '#00ff00' : '#ff0000');
+            goldText.setText(`Gold: ${gold}`);
+            levelText.setText(`Level: ${level}`);
+            pickaxeLevelText.setText(`Pickaxe Level: ${pickaxelevel}`);
+            helmetLevelText.setText(`Helmet Level: ${helmetlevel}`);
+            levelUpPickaxeButton.setText(`Level Up Pickaxe ${goldToLevelUpPickaxe} gold`);
+            if (gold < goldToLevelUpPickaxe) {
+                levelUpPickaxeButton.setStyle({ backgroundColor: '#808080' });
+            } else {
+                levelUpPickaxeButton.setStyle({ backgroundColor: '#3498db' });
+            }
+            if (gold < goldToLevelUpHelmet) {
+                levelUpHelmetButton.setStyle({ backgroundColor: '#808080' });
+            } else {
+                levelUpHelmetButton.setStyle({ backgroundColor: '#e67e22' });
+            }
+            levelUpHelmetButton.setText(`Level Up Helmet ${goldToLevelUpHelmet} gold`);
+            levelUpButton.setText(`Level Up ${xpToLevelUp} xp`);
+
+            fireBackground.setVisible(false);
+            castleBackground.setVisible(false);
+            background.setVisible(true);
+            if (level >= 5) {
+                fireBackground.setVisible(false);
+                castleBackground.setVisible(true);
+                background.setVisible(false);
+            }
+            if (level >= 10) {
+                fireBackground.setVisible(true);
+                castleBackground.setVisible(false);
+                background.setVisible(false);
+            }
+            updateGear(level1helmet, helmetlevel);
+            updateGear(pickaxe, pickaxelevel);
+        }
+
+        function initpickaxe(screen, pickaxe) {
+            pickaxe.setScale(0.4);
+            pickaxe.setOrigin(0, 1); // Set anchor point to left bottom corner
+            pickaxe.depth = hero.depth + 1; // Ensure the sword appears above the hero
+            screen.tweens.add({
+                targets: pickaxe,
+                angle: { from: 35, to: 15 },
+                duration: pickdelay,
+                yoyo: true,
+                onUpdate: function (tween) {
+                    pickaxe.setOrigin(0, 1); // Set anchor point to bottom left corner during the tween
+                },
+                repeat: -1,
+                onRepeat: function () {
+                    screen.sound.play('pickaxeSound');
+                },
+            });
+            pickaxe.setScale(0.4);
+            pickaxe.setOrigin(0.5, 0.5);
+            pickaxe.depth = hero.depth + 1; // Ensure the sword appears above the hero
+            pickaxe.setScale(0.4);
+            // Change color based on the level
+        }
+
+        function updateGear(item, itemlevel) {
+            if(itemlevel >= 5) {
+                item.setTint(0x00BFFF);
+            }
+            if(itemlevel >= 10) {
+                item.setTint("0x00ff00");
+            }
+        }
+
+        function gainXP() {
+            xp += xpPerSecond;
+            gold += 1 * pickaxelevel + helmetlevel;
+            localStorage.setItem('xp', xp);
+            localStorage.setItem('gold', gold);
+        }
+
+        function levelUp() {
+            if (xp >= xpToLevelUp) {
+                level += 1;
+                xp -= xpToLevelUp;
+                xpToLevelUp = Math.ceil(xpToLevelUp * 1.5 / 10) * 10; // Increase the XP needed for each level exponentially and round to the nearest 10
+                localStorage.setItem('xpToLevelUp', xpToLevelUp); // Save the new xpToLevelUp in local storage
+                localStorage.setItem('level', level); // Save the level in local storage
+            }
+        }
+
+        function resetGame() {
+            localStorage.clear();
+            location.reload();
+        }
+    </script>
+</body>
+</html>

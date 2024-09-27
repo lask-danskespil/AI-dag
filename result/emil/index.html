@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Race the Sun</title>
+    <style>
+        body {
+          margin: 0;
+          overflow: hidden;
+        }
+
+        .speedDisplayWrapper {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          font-size: 20px;
+          color: white;
+        }
+        
+        .scoreboardWrapper {
+          position: absolute;
+          top: 10px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 20px;
+          color: white;
+        }
+
+        #gameOver {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, calc(-50% - 60px));
+          font-size: 40px;
+          color: black;
+        }
+
+        #startButton, #restartButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+
+        #restartButton {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="speedDisplayWrapper">Speed: <span id="speedDisplay">0</span></div>
+    <div class="scoreboardWrapper">Score: <span id="scoreboard">0</span></div>
+    <div id="gameOver"></div>
+    <button id="startButton">Start Game</button>
+    <button id="restartButton">Restart Game</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene, Camera, and Renderer setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Create the player (aircraft)
+        const playerGeometry = new THREE.ConeGeometry(1, 2, 32);
+        const playerMaterial = new THREE.MeshBasicMaterial({ color: 0x0077ff });
+        const player = new THREE.Mesh(playerGeometry, playerMaterial);
+        player.rotation.x = Math.PI / 2; // Rotate so it's facing forward
+        player.position.set(0, 0, -10);
+        scene.add(player);
+
+        // Variables
+        const initPlayerSpeed = 0.05;  // Initial player speed
+        const initObstacleSpeed = 0.05;  // Initial obstacle speed
+        const initSunTime = 30;  // Initial sun time
+        let playerSpeed = initPlayerSpeed;  // Player speed
+        let obstacleSpeed = initObstacleSpeed;  // Obstacle speed
+        let obstacles = [];
+        let powerUps = [];
+        let sunTime = initSunTime;  // Sun time
+        let gameOver = false;
+        let score = 0; // Initial score
+        let speedIncreaseRate = 0.001;  // Slower increase rate
+        let gameIntervals;
+        const maxObstacleSpeed = 2;  // Max speed
+
+        // Define world boundaries
+        const worldBounds = {
+            minY: -50,
+            maxY: 4
+        };
+
+        // Player controls
+        const keys = {
+            left: false,
+            right: false,
+            up: false,
+            down: false
+        };
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'ArrowLeft') keys.left = true;
+            if (event.code === 'ArrowRight') keys.right = true;
+            if (event.code === 'ArrowUp') keys.up = true;
+            if (event.code === 'ArrowDown') keys.down = true;
+        });
+        document.addEventListener('keyup', (event) => {
+            if (event.code === 'ArrowLeft') keys.left = false;
+            if (event.code === 'ArrowRight') keys.right = false;
+            if (event.code === 'ArrowUp') keys.up = false;
+            if (event.code === 'ArrowDown') keys.down = false;
+        });
+        
+        // Add fog to the scene
+        scene.fog = new THREE.Fog(0x000000, 50, 200); // Color, near, far
+        
+        // Add grid helper
+        // const gridHelper = new THREE.GridHelper(200, 50); // Size 200, 50 divisions
+        // scene.add(gridHelper);
+
+        // Load font and add numbers to the grid
+        // const loader = new THREE.FontLoader();
+        // loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function (font) {
+        //     const textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+        //     for (let i = -100; i <= 100; i += 10) {
+        //         const textGeometryX = new THREE.TextGeometry(i.toString(), {
+        //             font: font,
+        //             size: 1,
+        //             height: 0.1
+        //         });
+        //         const textMeshX = new THREE.Mesh(textGeometryX, textMaterial);
+        //         textMeshX.position.set(i, 0, 0);
+        //         scene.add(textMeshX);
+
+        //         const textGeometryZ = new THREE.TextGeometry(i.toString(), {
+        //             font: font,
+        //             size: 1,
+        //             height: 0.1
+        //         });
+        //         const textMeshZ = new THREE.Mesh(textGeometryZ, textMaterial);
+        //         textMeshZ.position.set(0, 0, i);
+        //         scene.add(textMeshZ);
+        //     }
+        // });
+
+        // Define power-up types
+        const POWER_UP_TYPES = {
+            JUMP: 'jump',
+            SPEED_BOOST: 'speed_boost',
+            INVINCIBLE: 'invincible',
+            EXTRATIME: 'extra_time'
+        };
+
+        // Power-up effects
+        const powerUpEffects = {
+            [POWER_UP_TYPES.JUMP]: () => {
+                player.position.y += 5; // Jump effect
+                setTimeout(() => {
+                    player.position.y -= 5; // Return to original position after 1 second
+                }, 1000);
+            },
+            [POWER_UP_TYPES.SPEED_BOOST]: () => {
+                playerSpeed *= 2; // Double the player speed
+                obstacleSpeed *= 2; // Double the player speed
+                setTimeout(() => {
+                    playerSpeed /= 2; // Return to original speed after 5 seconds
+                    obstacleSpeed /= 2; // Return to original speed after 5 seconds
+                }, 5000);
+            },
+            [POWER_UP_TYPES.INVINCIBLE]: () => {
+                player.invincible = true; // Make player invincible
+                setTimeout(() => {
+                    player.invincible = false; // Return to normal after 5 seconds
+                }, 5000);
+            },
+            [POWER_UP_TYPES.EXTRATIME]: () => {
+                sunTime += 10; // Add 10 seconds to the sun time
+            }
+        };
+
+        // Add power-ups
+        function spawnPowerUp() {
+            const powerUpType = Object.values(POWER_UP_TYPES)[Math.floor(Math.random() * Object.values(POWER_UP_TYPES).length)];
+            const powerUpGeometry = new THREE.SphereGeometry(1, 32, 32);
+            const powerUpMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            // color based on power-up type
+            if (powerUpType === POWER_UP_TYPES.JUMP) {
+                powerUpMaterial.color.setHex(0x00ff00);
+            } else if (powerUpType === POWER_UP_TYPES.SPEED_BOOST) {
+                powerUpMaterial.color.setHex(0xff0000);
+            } else if (powerUpType === POWER_UP_TYPES.INVINCIBLE) {
+                powerUpMaterial.color.setHex(0x0000ff);
+            } else if (powerUpType === POWER_UP_TYPES.EXTRATIME) {
+                powerUpMaterial.color.setHex(0xffff00);
+            }
+            const powerUp = new THREE.Mesh(powerUpGeometry, powerUpMaterial);
+            powerUp.position.set(
+                Math.random() * 20 - 10, // Random X position
+                0,
+                Math.random() * -80 - 120  // Spawning farther, between -80 and -120
+            );
+            powerUp.type = powerUpType;
+
+            powerUps.push(powerUp);
+            scene.add(powerUp);
+        }
+
+        // Add obstacles
+        function spawnObstacle() {
+          const width = Math.random() * (10 - 2) + 2;
+          const height = Math.random() * (7 - 2) + 2;
+          const depth = Math.random() * (5 - 2) + 2;
+
+          const obstacleGeometry = new THREE.BoxGeometry(width, height, depth);
+          const obstacleMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+          const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+          obstacle.position.set(
+              Math.random() * 400 - 200, // Random X position
+              0,
+              Math.random() * -80 - 160  // Spawning farther, between -80 and -120
+          );
+
+          // Create white border
+          const edges = new THREE.EdgesGeometry(obstacleGeometry);
+          const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+          const line = new THREE.LineSegments(edges, lineMaterial);
+          obstacle.add(line);
+
+          obstacles.push(obstacle);
+          scene.add(obstacle);
+        }
+
+        // Create the sun
+        const sunGeometry = new THREE.SphereGeometry(5, 32, 32);
+        const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+        const initialSunY = 50; // Initial position of the sun
+        const finalSunY = -10; // Final position of the sun
+        sun.position.set(0, 50, -150); // Initial position of the sun
+        scene.add(sun);
+
+        // Create the floor
+        const floorGeometry = new THREE.PlaneGeometry(400, 300);
+        const floorMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = Math.PI / 2; // Rotate the floor to be horizontal
+        floor.position.y = -1; // Position the floor slightly below the player
+        scene.add(floor);
+
+        // Game loop
+        function animate() {
+            if (!gameOver) {
+                requestAnimationFrame(animate);
+            }
+            
+            // Move scene elements based on key input
+            if (keys.left) {
+                obstacles.forEach(obstacle => obstacle.position.x += playerSpeed);
+                powerUps.forEach(powerUp => powerUp.position.x += playerSpeed);
+                floor.position.x += playerSpeed;
+            }
+            if (keys.right) {
+                obstacles.forEach(obstacle => obstacle.position.x -= playerSpeed);
+                powerUps.forEach(powerUp => powerUp.position.x -= playerSpeed);
+                floor.position.x -= playerSpeed;
+            }
+            if (keys.up && player.position.z > worldBounds.minY) {
+                player.position.z -= playerSpeed;
+            }
+            if (keys.down && player.position.z < worldBounds.maxY) {
+                player.position.z += playerSpeed;
+            }
+
+            updateSpeed();
+
+            // Move obstacles toward the player
+            obstacles.forEach((obstacle, index) => {
+                obstacle.position.z += obstacleSpeed;
+                // Remove obstacle if it's well behind the camera's position
+                if (obstacle.position.z > camera.position.z + 10) {
+                    scene.remove(obstacle);
+                    obstacles.splice(index, 1);
+                }
+
+                // Check for collisions using bounding boxes
+                const playerBox = new THREE.Box3().setFromObject(player);
+                obstacles.forEach((obstacle, index) => {
+                    const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+                    if (playerBox.intersectsBox(obstacleBox) && !player.invincible) {
+                        endGame("You crashed!");
+                    }
+                });
+            });
+
+            // Check for collisions with power-ups
+            powerUps.forEach((powerUp, index) => {
+              console.log(powerUp);
+              powerUp.position.z += obstacleSpeed;
+                const powerUpBox = new THREE.Box3().setFromObject(powerUp);
+                const playerBox = new THREE.Box3().setFromObject(player);
+                if (playerBox.intersectsBox(powerUpBox)) {
+                    powerUpEffects[powerUp.type]();
+                    scene.remove(powerUp);
+                    powerUps.splice(index, 1);
+                }
+            });
+
+            // Animate the sun setting
+            const sunY = initialSunY + (finalSunY - initialSunY) * (1 - sunTime / initSunTime);
+            sun.position.y = sunY;
+
+            // reduce sun time by 1 every 1000ms
+            sunTime -= 0.01;
+
+            // Update the floor position to create an infinite floor effect
+            floor.position.x = player.position.x;
+            floor.position.z = player.position.z;
+
+            renderer.render(scene, camera);
+        }
+
+        // Countdown timer (sun setting)
+        function reduceSunTime() {
+            if (!gameOver) {
+                if (sunTime <= 0) {
+                    endGame("The sun has set!");
+                }
+            }
+        }
+
+        function addAllIntervals() {
+            gameIntervals = setInterval(() => {
+                updateScore();
+                reduceSunTime();
+                // spawn multiple obstacles between 5 and 10 at a time
+                for (let i = 0; i < Math.floor(Math.random() * 5) + 5; i++) {
+                    spawnObstacle();
+                }
+                // Spawn power-ups occasionally
+                if (Math.random() < 0.1) {
+                    spawnPowerUp();
+                }
+              
+            }, 1000);
+        }
+
+        // End the game
+        function endGame(message) {
+            gameOver = true;
+            clearInterval(gameIntervals);
+            document.getElementById('gameOver').textContent = message;
+            document.getElementById('restartButton').style.display = 'block';
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        document.getElementById('startButton').addEventListener('click', startGame);
+        document.getElementById('restartButton').addEventListener('click', startGame);
+
+        // Update obstacle speed
+        function updateSpeed() {
+          if (obstacleSpeed < maxObstacleSpeed) {
+            obstacleSpeed += speedIncreaseRate;
+          }
+
+          if (playerSpeed < maxObstacleSpeed) {
+            playerSpeed += speedIncreaseRate;
+          }
+          
+          document.getElementById('speedDisplay').textContent = `${obstacleSpeed.toFixed(2)}`;
+        }
+
+        // Update score
+        function updateScore() {
+            if (!gameOver) {
+                score++;
+                document.getElementById('scoreboard').textContent = `${score}`;
+            }
+        }
+
+        // Start the game
+        function startGame() {
+          player.position.set(0, 0, -10);
+            // remove all obstacles
+            obstacles.forEach(obstacle => scene.remove(obstacle));
+            obstacles = [];
+
+            gameOver = false;
+            score = 0;
+            playerSpeed = initPlayerSpeed;  // Slower player speed
+            obstacleSpeed = initObstacleSpeed;  // Slower obstacle speed
+            sunTime = initSunTime;  // Reset sun time
+            document.getElementById('startButton').style.display = 'none';
+            document.getElementById('restartButton').style.display = 'none';
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('scoreboard').textContent = `${score}`;
+            document.getElementById('speedDisplay').textContent = `${obstacleSpeed.toFixed(2)}`;
+            // start gameIntervals again
+            addAllIntervals();
+            // Start the game loop
+            animate();
+        }
+
+        // Adjust camera position (Move up and look down at the player)
+        camera.position.set(0, 5, 10);  // Move the camera up on the Y axis and back on the Z axis
+        camera.lookAt(player.position);  // Make the camera look at the player
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
