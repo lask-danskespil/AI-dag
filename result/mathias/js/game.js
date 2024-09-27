@@ -33,9 +33,10 @@ let invincible = false;
 let scoreText;
 let hearts;
 let playAgainButton; // Button to restart the game
+let gameIsRunning = true;
 
 function preload() {
-
+  gameIsRunning = true;
   // Load assets
   this.load.image('heart', 'img/heart.png');
   this.load.image('ground', 'https://labs.phaser.io/assets/sprites/platform.png');
@@ -97,6 +98,7 @@ function preload() {
 }
 
 function create() {
+  this.gameIsRunning = true;
   this.anims.create(moveRight);
   this.anims.create(moveLeft);
   this.anims.create(playerIdle);
@@ -184,8 +186,10 @@ function update() {
   }
 
   // Update the score as the player survives longer
-  score += 1;
-  scoreText.setText('Score: ' + score);
+  if (gameIsRunning) {
+    score += 1;
+    scoreText.setText('Score: ' + score);
+  }
 
   // Store obstacles that are off-screen for later removal
   let obstaclesToRemove = [];
@@ -342,6 +346,7 @@ function endGame() {
 
   // Stop the game physics (optional)
   this.physics.pause();
+  gameIsRunning = false;
 }
 
 function restartGame() {

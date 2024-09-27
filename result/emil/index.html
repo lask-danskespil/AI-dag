@@ -87,6 +87,8 @@
         let score = 0; // Initial score
         let speedIncreaseRate = 0.001;  // Slower increase rate
         let gameIntervals;
+        let invincibleInterval;
+        let invincibleInterval2;
         const maxObstacleSpeed = 2;  // Max speed
 
         // Define world boundaries
@@ -150,10 +152,10 @@
 
         // Define power-up types
         const POWER_UP_TYPES = {
-            JUMP: 'jump',
-            SPEED_BOOST: 'speed_boost',
-            INVINCIBLE: 'invincible',
-            EXTRATIME: 'extra_time'
+             JUMP: 'jump',
+             SPEED_BOOST: 'speed_boost',
+             INVINCIBLE: 'invincible',
+             EXTRATIME: 'extra_time'
         };
 
         // Power-up effects
@@ -174,8 +176,24 @@
             },
             [POWER_UP_TYPES.INVINCIBLE]: () => {
                 player.invincible = true; // Make player invincible
+                // change color on character to pink
+                playerMaterial.color.setHex(0xff00ff);
+                // blink the player rapidly 1 second before invincibility ends (4 seconds in)
+                setTimeout(() => {
+                  invincibleInterval = setInterval(() => {
+                        playerMaterial.color.setHex(0xff00ff);
+                        invincibleInterval2 = setTimeout(() => {
+                            playerMaterial.color.setHex(0x0077ff);
+                        }, 100);
+                    }, 200);
+                }, 4000);
+                
                 setTimeout(() => {
                     player.invincible = false; // Return to normal after 5 seconds
+                    playerMaterial.color.setHex(0x0077ff);
+
+                    clearInterval(invincibleInterval);
+                    clearTimeout(invincibleInterval2);
                 }, 5000);
             },
             [POWER_UP_TYPES.EXTRATIME]: () => {
