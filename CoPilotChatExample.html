@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gæt et Tal - Phaser 3</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<script>
+class GuessNumberGame extends Phaser.Scene {
+  constructor() {
+    super({ key: 'GuessNumberGame' });
+    this.secretNumber = Phaser.Math.Between(1, 10);
+    this.inputNumber = '';
+  }
+  preload() {}
+  create() {
+    this.add.text(100, 50, 'Gæt et tal mellem 1 og 10', { fontSize: '24px', fill: '#fff' });
+    this.inputField = this.add.text(100, 150, 'Indtast dit gæt: ', { fontSize: '24px', fill: '#fff' });
+    this.message = this.add.text(100, 250, '', { fontSize: '24px', fill: '#fff' });
+    this.input.keyboard.on('keydown', this.handleInput, this);
+  }
+  handleInput(event) {
+    if (event.key >= '0' && event.key <= '9') {
+      this.inputNumber += event.key;
+      this.inputField.setText('Indtast dit gæt: ' + this.inputNumber);
+    } else if (event.key === 'Enter') {
+      this.checkGuess();
+    }
+  }
+  checkGuess() {
+    const guessedNumber = parseInt(this.inputNumber);
+    if (guessedNumber === this.secretNumber) {
+      this.message.setText('Korrekt! Du gættede rigtigt.');
+    } else if (guessedNumber < this.secretNumber) {
+      this.message.setText('For lavt! Prøv igen.');
+    } else {
+      this.message.setText('For højt! Prøv igen.');
+    }
+    this.inputNumber = ''; // Nulstil input
+    this.inputField.setText('Indtast dit gæt: ');
+  }
+}
+const config = {
+  type: Phaser.AUTO,
+  width: 800,
+  height: 600,
+  backgroundColor: '#2D2D2D',
+  scene: GuessNumberGame
+};
+const game = new Phaser.Game(config);
+</script>
+</body>
+</html>

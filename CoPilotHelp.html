@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Click the Square</title>
+        <style> body { margin: 0; } </style>
+    </head>
+    <body>
+        <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+        <script src="game.js"></script>
+    </body>
+    </html>
+<script>
+
+const config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    backgroundColor: '#ffffff',
+    scene: {
+        preload: preload,
+        create: create,
+        update: update
+    }
+};
+
+// Initialisering af spillet
+const game = new Phaser.Game(config);
+let square;
+
+function preload() {
+    // Forlader tom, da vi ikke har assets at preload
+}
+
+function create() {
+    // Opret en firkant (grafik objekt)
+    square = this.add.rectangle(400, 300, 100, 100, 0x00ff00);
+
+    // Gør firkanten interaktiv, så den kan klikkes
+    square.setInteractive();
+
+    // Håndter klik på firkanten
+    square.on('pointerdown', onClickSquare, this);
+}
+
+function update() {
+}
+
+// Funktion, der håndteres ved klik på firkanten
+function onClickSquare() {
+    // Skift firkantens farve til en tilfældig farve, når der klikkes på den
+    square.fillColor = Phaser.Display.Color.RandomRGB().color;
+
+    // Firkanten skal skifte til en cirkel, når der klikkes på den
+    square = this.add.circle(square.x, square.y, 50, 0xff0000);
+}    
+</script>

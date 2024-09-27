@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Invaders</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+
+<script>
+    let config = {
+        type: Phaser.AUTO,
+        width: 800,
+        height: 600,
+        physics: {
+            default: 'arcade',
+            arcade: {
+                debug: false
+            }
+        },
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
+        }
+    };
+
+    let player;
+    let cursors;
+    let bullets;
+    let monsters;
+    let score = 0;
+    let scoreText;
+    let lives = 3;
+    let livesText;
+    let lastFired = 0;
+
+    const BulletSpeed = 400;
+    const FireRate = 300; // Time between shots in milliseconds
+
+    let game = new Phaser.Game(config);
+
+    function preload () {
+        this.load.image('player', 'https://examples.phaser.io/assets/sprites/player.png');
+        this.load.image('bullet', 'https://examples.phaser.io/assets/sprites/bullet.png');
+        this.load.image('monster', 'https://examples.phaser.io/assets/sprites/space-baddie.png');
+    }
+
+    function create () {
+        // Create player
+        player = this.physics.add.sprite(400, 550, 'player').setCollideWorldBounds(true);
+
+        // Create group for bullets
+        bullets = this.physics.add.group({
+            defaultKey: 'bullet',
+            maxSize: 10
+        });
+
+        // Create monsters
+        monsters = this.physics.add.group({
+            key: 'monster',
+            repeat: 10,
+            setXY: { x: 100, y: 100, stepX: 60 }
+        });
+
+        // Set monster movement
+        Phaser.Actions.Call(monsters.getChildren(), function(monster) {
+            monster.setVelocityX(100);
+        });
+
+        // Create score and lives texts
+        scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#FFF' });
+        livesText = this.add.text(650, 16, 'Lives: 3', { fontSize: '32px', fill: '#FFF' });
+
+        // Input setup
+        cursors = this.input.keyboard.createCursorKeys();
+    }
+
+    function update (time, delta) {
+        // Player movement
+        if (cursors.left.isDown) {
+            player.setVelocityX(-300);
+        } else if (cursors.right.isDown) {
+            player.setVelocityX(300);
+        } else {
+            player.setVelocityX(0);
+        }
+
+        // Fire bullets
+        if (cursors.space.isDown && time > lastFired) {
+            let bullet = bullets.get(player.x, player.y - 20);
+
+            if (bullet) {
+                bullet.setActive(true);
+                bullet.setVisible(true);
+                bullet.body.velocity.y = -BulletSpeed;
+                lastFired = time + FireRate;
+            }
+        }
+
+        // Recycle bullets
+        bullets.children.each(function(bullet) {
+            if (bullet.active && bullet.y < 0) {
+                bullet.setActive(false);
+                bullet.setVisible(false);
+            }
+        });
+
+        // Move monsters and reverse direction
+        monsters.children.each(function(monster) {
+            if (monster.x > 750) {
+                Phaser.Actions.Call(monsters.getChildren(), function(m) { m.y += 10; m.setVelocityX(-100); });
+            } else if (monster.x < 50) {
+                Phaser.Actions.Call(monsters.getChildren(), function(m) { m.y += 10; m.setVelocityX(100); });
+            }
+        });
+
+        // Bullet and monster collision detection
+        this.physics.add.overlap(bullets, monsters, hitMonster, null, this);
+
+        // Plane and monster collision detection
+        this.physics.add.collider(plane, monsters, hitPlane, null, this);
+    }
+
+    function hitMonster(bullet, monster) {
+        bullet.setActive(false);
+        bullet.setVisible(false);
+        monster.disableBody(true, true);
+
+        // Update score
+        score += 10;
+        scoreText.setText('Score: ' + score);
+
+        // Check if all monsters are killed
+        if (monsters.countActive(true) === 0) {
+            // Respawn monsters
+            monsters.children.each(function(monster) {
+                monster.enableBody(true, monster.x, 0, true, true);
+            });
+        }
+    }
+</script>
+
+</body>
+</html>
