@@ -65,6 +65,14 @@
         let gameOverText; // Game Over text object
         let startButton; // Start button object
         let gameOver = false; // Flag to indicate if the game is over
+        let lockDelay = 500;  // 500 milliseconds delay before locking
+        let lockTimer = null; // Timer for block locking
+        let keyCooldown = 150; // 150 milliseconds cooldown between key presses
+        let lastKeyPressTime = {
+            left: 0,
+            right: 0,
+            down: 0
+        };
 
         const shapes = [
             // I
@@ -130,67 +138,65 @@
         }
 
         function create() {
-            // Initialize the board (2D array)
-            for (let y = 0; y < boardHeight; y++) {
-                board[y] = [];
-                for (let x = 0; x < boardWidth; x++) {
-                    board[y][x] = null;
-                }
-            }
-
-            // Draw the border around the play area
-            borderGraphics = this.add.graphics();
-            borderGraphics.lineStyle(4, 0x000000, 1); // Black border with 4px thickness
-            borderGraphics.strokeRect(0, 0, boardWidth * blockSize, boardHeight * blockSize);
-
-            // Set up controls
-            cursors = this.input.keyboard.createCursorKeys();
-            spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-
-            // Generate the first and next blocks
-            nextBlock = generateRandomBlock();
-            spawnBlock(this);
-
-            // Initialize the Game Over text (hidden initially)
-            gameOverText = this.add.text(150, 250, 'Game Over', { fontSize: '48px', fill: '#FF0000', backgroundColor: 'rgba(0, 0, 0, 0.5)' });
-            gameOverText.setOrigin(0.5, 0.5);
-            gameOverText.setVisible(false);
-            gameOverText.setDepth(10); // Ensure the text is displayed on top
-
-            // Initialize the Start button (hidden initially)
-            startButton = this.add.text(160, 350, 'Start New Game', {  
-                fontSize: '24px', 
-                fill: '#FFFFFF', 
-                backgroundColor: '#0000FF', 
-                padding: { x: 10, y: 5 },  // Optional padding for better visual appearance
-                align: 'center'
-            });
-            startButton.setOrigin(0.5, 0.5);
-            startButton.setInteractive({ useHandCursor: true });
-            startButton.setVisible(false);
-            startButton.setDepth(10); // Ensure the button is displayed on top
-            startButton.on('pointerdown', startNewGame, this); // Add click event
-
-            // Optional: Change the cursor when hovering over the text
-            startButton.on('pointerover', () => {
-                startButton.setStyle({ fill: '#FFD700' }); // Change text color on hover
-            });
-
-            startButton.on('pointerout', () => {
-                startButton.setStyle({ fill: '#FFFFFF' }); // Revert text color when not hovering
-            });
-
-            nextPieceText = this.add.text(320, 20, 'Next:', { fontSize: '14px', fill: '#000000' });
-
-            // Initialize score text
-            scoreText = this.add.text(320, 150, 'Score:\n0', { fontSize: '14px', fill: '#000000' });
-
-            // Initialize high score text
-            highScoreText = this.add.text(320, 200, `High Score:\n${highScore}`, { fontSize: '13px', fill: '#000000' });
-
-            // Initialize level text
-            levelText = this.add.text(320, 250, `Level:\n${level}`, { fontSize: '13px', fill: '#000000' });
+    // Initialize the board (2D array)
+    for (let y = 0; y < boardHeight; y++) {
+        board[y] = [];
+        for (let x = 0; x < boardWidth; x++) {
+            board[y][x] = null;
         }
+    }
+
+    // Draw the border around the play area
+    borderGraphics = this.add.graphics();
+    borderGraphics.lineStyle(4, 0x000000, 1); // Black border with 4px thickness
+    borderGraphics.strokeRect(0, 0, boardWidth * blockSize, boardHeight * blockSize);
+
+    // Set up controls
+    cursors = this.input.keyboard.createCursorKeys();
+    spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+    // Initialize the Game Over text (hidden initially)
+    gameOverText = this.add.text(150, 250, 'Game Over', { fontSize: '48px', fill: '#FF0000', backgroundColor: 'rgba(0, 0, 0, 0.5)' });
+    gameOverText.setOrigin(0.5, 0.5);
+    gameOverText.setVisible(false);
+    gameOverText.setDepth(10); // Ensure the text is displayed on top
+
+    // Initialize the Start button
+    startButton = this.add.text(160, 350, 'Start Game', {  
+        fontSize: '24px', 
+        fill: '#FFFFFF', 
+        backgroundColor: '#0000FF', 
+        padding: { x: 10, y: 5 },  // Optional padding for better visual appearance
+        align: 'center'
+    });
+    startButton.setOrigin(0.5, 0.5);
+    startButton.setInteractive({ useHandCursor: true });
+    startButton.setDepth(10); // Ensure the button is displayed on top
+    startButton.on('pointerdown', startNewGame, this); // Add click event
+
+    // Optional: Change the cursor when hovering over the text
+    startButton.on('pointerover', () => {
+        startButton.setStyle({ fill: '#FFD700' }); // Change text color on hover
+    });
+
+    startButton.on('pointerout', () => {
+        startButton.setStyle({ fill: '#FFFFFF' }); // Revert text color when not hovering
+    });
+
+    nextPieceText = this.add.text(320, 20, 'Next:', { fontSize: '14px', fill: '#000000' });
+
+    // Initialize score text
+    scoreText = this.add.text(320, 150, 'Score:\n0', { fontSize: '14px', fill: '#000000' });
+
+    // Initialize high score text
+    highScoreText = this.add.text(320, 200, `High Score:\n${highScore}`, { fontSize: '13px', fill: '#000000' });
+
+    // Initialize level text
+    levelText = this.add.text(320, 250, `Level:\n${level}`, { fontSize: '13px', fill: '#000000' });
+
+    // Do not auto-start the game, just display the button
+    gameOver = true;
+}
 
         function generateRandomBlock() {
             const shapeIndex = Phaser.Math.Between(0, shapes.length - 1);
@@ -262,22 +268,38 @@
             }
         }
 
-        function update() {
+        function update(time, delta) {
             if (gameOver) return; // Do nothing if the game is over
 
-            // Handle input
-            if (Phaser.Input.Keyboard.JustDown(cursors.left)) {
+            // Handle input with cooldown for left, right, and down keys
+            if (cursors.left.isDown && time > lastKeyPressTime.left + keyCooldown) {
                 moveBlock(-1, 0, this);
-            } else if (Phaser.Input.Keyboard.JustDown(cursors.right)) {
+                lastKeyPressTime.left = time; // Update last press time for left key
+            } else if (cursors.right.isDown && time > lastKeyPressTime.right + keyCooldown) {
                 moveBlock(1, 0, this);
+                lastKeyPressTime.right = time; // Update last press time for right key
+            } else if (cursors.down.isDown && time > lastKeyPressTime.down + keyCooldown) {
+                if (!moveBlock(0, 1, this)) {
+                    // If the block can't move down, start the lock delay
+                    if (!lockTimer) {
+                        lockTimer = this.time.addEvent({
+                            delay: lockDelay,
+                            callback: () => {
+                                lockBlock(this);
+                                spawnBlock(this);
+                                lockTimer = null; // Reset the timer
+                            },
+                            callbackScope: this
+                        });
+                    }
+                } else if (lockTimer) {
+                    // If the block moved successfully, cancel the lock delay
+                    lockTimer.remove();
+                    lockTimer = null;
+                }
+                lastKeyPressTime.down = time; // Update last press time for down key
             } else if (Phaser.Input.Keyboard.JustDown(cursors.up)) {
                 rotateBlock(this);
-            } else if (Phaser.Input.Keyboard.JustDown(cursors.down)) {
-                if (!moveBlock(0, 1, this)) {
-                    // If the block can't move down, lock it in place and spawn a new one
-                    lockBlock(this);
-                    spawnBlock(this);
-                }
             } else if (Phaser.Input.Keyboard.JustDown(spaceKey)) {
                 dropBlock(this);
             }
@@ -285,13 +307,27 @@
             // Handle block dropping over time
             if (this.time.now > lastDropTime + dropTime) {
                 if (!moveBlock(0, 1, this)) {
-                    // If the block can't move down, lock it in place and spawn a new one
-                    lockBlock(this);
-                    spawnBlock(this);
+                    // If the block can't move down, start the lock delay
+                    if (!lockTimer) {
+                        lockTimer = this.time.addEvent({
+                            delay: lockDelay,
+                            callback: () => {
+                                lockBlock(this);
+                                spawnBlock(this);
+                                lockTimer = null; // Reset the timer
+                            },
+                            callbackScope: this
+                        });
+                    }
+                } else if (lockTimer) {
+                    // If the block moved successfully, cancel the lock delay
+                    lockTimer.remove();
+                    lockTimer = null;
                 }
                 lastDropTime = this.time.now;
             }
         }
+
 
         function moveBlock(dx, dy, scene) {
             let newX = currentBlock.x + dx;
@@ -311,14 +347,24 @@
         }
 
         function dropBlock(scene) {
-            // Drop the block all the way down
-            while (moveBlock(0, 1, scene)) {
-                // Keep moving the block down until it can't move anymore
-            }
+        // Get the current Y position before the drop
+        let initialY = currentBlock.y;
 
-            // Lock the block in place and spawn a new one
-            lockBlock(scene);
-            spawnBlock(scene);
+        // Drop the block all the way down
+        while (moveBlock(0, 1, scene)) {
+            // Keep moving the block down until it can't move anymore
+        }
+
+        // Calculate how many lines were dropped
+        let linesDropped = currentBlock.y - initialY;
+
+        // Add 1 point for each line dropped
+        score += linesDropped;
+        scoreText.setText(`Score:\n${score}`);
+
+        // Lock the block in place and spawn a new one
+        lockBlock(scene);
+        spawnBlock(scene);
         }
 
         function rotateBlock(scene) {
@@ -479,42 +525,42 @@
         }
 
         function startNewGame() {
-            // Destroy all existing blocks on the board
-            for (let y = 0; y < boardHeight; y++) {
-                for (let x = 0; x < boardWidth; x++) {
-                    if (board[y][x]) {
-                        board[y][x].destroy();  // Destroy the sprite
-                        board[y][x] = null;     // Clear the reference
-                    }
-                }
+    // Destroy all existing blocks on the board
+    for (let y = 0; y < boardHeight; y++) {
+        for (let x = 0; x < boardWidth; x++) {
+            if (board[y][x]) {
+                board[y][x].destroy();  // Destroy the sprite
+                board[y][x] = null;     // Clear the reference
             }
-
-            // Clear the next piece display
-            nextPieceDisplay.forEach(sprite => sprite.destroy());
-            nextPieceDisplay = [];
-
-            // Reset game variables
-            score = 0;
-            level = 1;
-            totalLinesCleared = 0;
-            dropTime = 1000;
-            scoreText.setText('Score:\n0');
-            levelText.setText(`Level:\n${level}`);
-            board = [];
-            for (let y = 0; y < boardHeight; y++) {
-                board[y] = [];
-                for (let x = 0; x < boardWidth; x++) {
-                    board[y][x] = null;
-                }
-            }
-
-            gameOver = false;
-            gameOverText.setVisible(false);
-            startButton.setVisible(false);
-
-            nextBlock = generateRandomBlock();
-            spawnBlock(this);
         }
+    }
+
+    // Clear the next piece display
+    nextPieceDisplay.forEach(sprite => sprite.destroy());
+    nextPieceDisplay = [];
+
+    // Reset game variables
+    score = 0;
+    level = 1;
+    totalLinesCleared = 0;
+    dropTime = 1000;
+    scoreText.setText('Score:\n0');
+    levelText.setText(`Level:\n${level}`);
+    board = [];
+    for (let y = 0; y < boardHeight; y++) {
+        board[y] = [];
+        for (let x = 0; x < boardWidth; x++) {
+            board[y][x] = null;
+        }
+    }
+
+    gameOver = false;
+    gameOverText.setVisible(false);
+    startButton.setVisible(false);
+
+    nextBlock = generateRandomBlock();
+    spawnBlock(this);
+}
     </script>
 </body>
 </html>
